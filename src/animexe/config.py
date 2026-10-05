@@ -47,6 +47,9 @@ class SchedulerConfig:
 class EpisodeConfig:
     input_mode: str = "local_or_provider"
     scene_detection: bool = True
+    scene_threshold: float = 27.0
+    scene_min_duration: float = 0.5
+    scene_frame_width: int = 640
     transcript: str = "auto"
 
 
@@ -150,6 +153,9 @@ def load_config(path: Path) -> AppConfig:
         episode=EpisodeConfig(
             input_mode=str(episode.get("input_mode", "local_or_provider")),
             scene_detection=bool(episode.get("scene_detection", True)),
+            scene_threshold=float(episode.get("scene_threshold", 27.0)),
+            scene_min_duration=float(episode.get("scene_min_duration", 0.5)),
+            scene_frame_width=int(episode.get("scene_frame_width", 640)),
             transcript=str(episode.get("transcript", "auto")),
         ),
         narration=NarrationConfig(
@@ -187,5 +193,11 @@ def load_config(path: Path) -> AppConfig:
         raise ValueError("video dimensions and fps must be positive")
     if config.narration.speed <= 0:
         raise ValueError("narration.speed must be positive")
+    if config.episode.scene_threshold <= 0:
+        raise ValueError("episode.scene_threshold must be positive")
+    if config.episode.scene_min_duration <= 0:
+        raise ValueError("episode.scene_min_duration must be positive")
+    if config.episode.scene_frame_width <= 0:
+        raise ValueError("episode.scene_frame_width must be positive")
 
     return config
