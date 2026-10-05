@@ -42,6 +42,13 @@ class AnimeRecord:
     priority: int = 0
     discovery_source: str = "manual"
     active: bool = False
+    anilist_id: int | None = None
+    mal_id: int | None = None
+    format: str | None = None
+    season_name: str | None = None
+    season_year: int | None = None
+    episode_count: int | None = None
+    last_metadata_sync_at: str | None = None
     created_at: str = field(default_factory=utc_now)
     updated_at: str = field(default_factory=utc_now)
 
