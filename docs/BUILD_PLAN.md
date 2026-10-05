@@ -64,8 +64,8 @@ Match narration segments to scenes using chronology, transcript overlap, entitie
 ### Phase 9 — Audio, subtitles, render
 Mix narration, ducked BGM, optional SFX, burned-in subtitles, and muted source audio. Render with FFmpeg and validate the final MP4.
 
-### Phase 10 — Scheduler
-Connect the production engine to the multi-anime scheduler. Defaults are four active anime and two successful outputs per day. Supported strategies are Balanced, Priority, and Flexible.
+### Phase 10 — Anime discovery, episode monitoring, and scheduler
+Build the anime library, discovery layer, release-state tracking, episode monitor, candidate pool, and multi-anime scheduler. The four-anime limit is an active-slot limit, not a manually selected list. AniMeXe should automatically discover/add anime according to configured discovery rules, exclude not-yet-released anime, detect premieres and newly released episodes, keep caught-up airing anime in a waiting state, and dynamically fill vacant active slots from eligible candidates. Defaults are four active anime and two successful outputs per day. Supported strategies are Balanced, Priority, and Flexible.
 
 ### Phase 11 — GitHub Actions
 Use GitHub Actions as the hosted worker. The sequence is checkout -> restore caches -> install/check media tools -> load state -> schedule jobs -> process -> validate -> upload artifacts -> persist state -> fetch main -> rebase -> push.
