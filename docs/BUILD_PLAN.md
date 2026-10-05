@@ -289,6 +289,10 @@ Completed in the current implementation slice:
 - provider interface and registry;
 - LocalProvider input adapter;
 - provider tests;
-- GitHub Actions CI with compile and test checks.
+- GitHub Actions CI with compile and test checks;
+- AniList/Jikan metadata clients and normalized AnimeMetadata;
+- metadata fallback service;
+- metadata CLI commands;
+- metadata configuration and contract tests.
 
-Next implementation slice: **metadata normalization and the verified Kuhi integration boundary**.
+Next implementation slice: **connect metadata to the persistent anime library, then verify and implement Kuhi's provider boundary**.
