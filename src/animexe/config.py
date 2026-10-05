@@ -103,6 +103,15 @@ def _section(data: dict[str, Any], key: str) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _optional_string(value: Any) -> str | None:
+    if value is None:
+        return None
+    value = str(value).strip()
+    if not value or (value.startswith("${") and value.endswith("}")):
+        return None
+    return value
+
+
 def load_config(path: Path) -> AppConfig:
     """Load YAML config and expand environment references."""
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -124,7 +133,7 @@ def load_config(path: Path) -> AppConfig:
         language=str(project.get("language", "hinglish")),
         provider=ProviderConfig(
             name=str(provider.get("name", "kuhi")),
-            api_base_url=provider.get("api_base_url"),
+            api_base_url=_optional_string(provider.get("api_base_url")),
             language=str(provider.get("language", "sub")),
         ),
         metadata=MetadataConfig(
