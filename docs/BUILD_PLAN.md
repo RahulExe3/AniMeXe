@@ -275,7 +275,7 @@ YouTube publishing is not required for this milestone.
 
 ## 8. Current implementation status
 
-**Foundation implementation is in progress.**
+**Foundation and metadata/provider implementation are in progress; episode analysis has now started.**
 
 Completed in the current implementation slice:
 - Python package;
@@ -293,6 +293,13 @@ Completed in the current implementation slice:
 - AniList/Jikan metadata clients and normalized AnimeMetadata;
 - metadata fallback service;
 - metadata CLI commands;
-- metadata configuration and contract tests.
+- metadata configuration and contract tests;
+- metadata-to-library upsert and identity merging;
+- Kuhi catalog/health boundary;
+- provider factory/registry wiring;
+- ffprobe-based episode inspection;
+- schema-versioned episode analysis manifests;
+- persisted episode inspection checkpoints;
+- episode inspection tests.
 
-Next implementation slice: **connect metadata to the persistent anime library, then verify and implement Kuhi's provider boundary**.
+Next implementation slice: **scene detection and representative frame indexing**.
