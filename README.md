@@ -884,11 +884,31 @@ AniMeXe will reuse the proven ideas of:
 
 YTAutoPilot's gaming-specific content and publishing code are not part of AniMeXe.
 
-### Kitsune provider
+### Provider strategy
 
-Kitsune is now the first external episode-provider adapter. The adapter will translate Kitsune-compatible search, anime details, episode lists, source information, subtitles, and intro/outro metadata into AniMeXe's normalized provider contract.
+Provider research has moved beyond the older Kitsune-first model.
 
-The Kitsune API base URL remains configurable. Provider-specific response fields must not leak into the scheduler, story engine, scene matcher, or renderer.
+**Primary external media-provider target:** Kuhi / `aryaniiil/anime-api`.
+
+**Secondary provider/reference targets:** Anivexa API, Anivault Scraper, StreamPlay, anime-sdk, and vetted CloudStream-style extensions.
+
+Kitsune remains a legacy/reference integration rather than the architectural center. See `docs/PROVIDERS.md` for the detailed registry, normalization contract, health model, fallback policy, and research notes.
+
+The provider boundary is:
+
+```
+metadata identity
+      ↓
+episode availability
+      ↓
+provider source resolution
+      ↓
+normalized MediaSource
+      ↓
+episode processing
+```
+
+Metadata existence must never be treated as proof that usable media exists.
 
 ### Checkpointed episode processing
 
