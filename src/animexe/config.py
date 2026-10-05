@@ -29,6 +29,13 @@ class ProviderConfig:
 
 
 @dataclass(frozen=True)
+class MetadataConfig:
+    anilist_endpoint: str = "https://graphql.anilist.co"
+    jikan_base_url: str = "https://api.jikan.moe/v4"
+    search_limit: int = 10
+
+
+@dataclass(frozen=True)
 class SchedulerConfig:
     max_active_anime: int = 4
     daily_output_limit: int = 2
@@ -81,6 +88,7 @@ class AppConfig:
     name: str = "AniMeXe"
     language: str = "hinglish"
     provider: ProviderConfig = ProviderConfig()
+    metadata: MetadataConfig = MetadataConfig()
     scheduler: SchedulerConfig = SchedulerConfig()
     episode: EpisodeConfig = EpisodeConfig()
     narration: NarrationConfig = NarrationConfig()
@@ -102,6 +110,7 @@ def load_config(path: Path) -> AppConfig:
 
     project = _section(expanded, "project")
     provider = _section(expanded, "provider")
+    metadata = _section(expanded, "metadata")
     scheduler = _section(expanded, "scheduler")
     episode = _section(expanded, "episode")
     narration = _section(expanded, "narration")
@@ -117,6 +126,11 @@ def load_config(path: Path) -> AppConfig:
             name=str(provider.get("name", "kuhi")),
             api_base_url=provider.get("api_base_url"),
             language=str(provider.get("language", "sub")),
+        ),
+        metadata=MetadataConfig(
+            anilist_endpoint=str(metadata.get("anilist_endpoint", "https://graphql.anilist.co")),
+            jikan_base_url=str(metadata.get("jikan_base_url", "https://api.jikan.moe/v4")),
+            search_limit=int(metadata.get("search_limit", 10)),
         ),
         scheduler=SchedulerConfig(
             max_active_anime=int(scheduler.get("max_active_anime", 4)),
@@ -154,6 +168,8 @@ def load_config(path: Path) -> AppConfig:
         ),
     )
 
+    if config.metadata.search_limit < 1 or config.metadata.search_limit > 50:
+        raise ValueError("metadata.search_limit must be between 1 and 50")
     if config.scheduler.max_active_anime < 1:
         raise ValueError("scheduler.max_active_anime must be at least 1")
     if config.scheduler.daily_output_limit < 1:
