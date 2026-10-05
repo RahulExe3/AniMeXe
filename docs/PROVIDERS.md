@@ -32,6 +32,15 @@ Every provider should produce an object containing anime ID, title, season, epis
 
 The renderer consumes this normalized object only.
 
+
+
+## Media retrieval and temporary storage
+A provider should return a normalized source reference and capabilities rather than requiring AniMeXe to permanently archive an episode. When supported, the media adapter should prefer range requests, HLS/DASH segments, or targeted timestamp retrieval so only the media needed for analysis and selected scenes is materialized.
+
+If a processing stage requires a local file for random access, AniMeXe may materialize the source in a temporary worker workspace. That file is disposable and must be deleted after successful rendering/validation. Provider adapters must not write source episodes into Git-backed state, the repository, or permanent asset directories.
+
+Provider capabilities should eventually expose whether a source supports streaming, range access, segmented retrieval, subtitles, duration probing, and timestamp seeking. Temporary provider/network failures must remain distinguishable from genuine media unavailability.
+
 ## Provider health
 Adapters must distinguish available, temporarily unavailable, episode unavailable, invalid response, rate limited, and configuration/authentication failure.
 
