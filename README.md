@@ -2,7 +2,7 @@
 
 > Anime episode explanation automation — research, episode understanding, narration, clip selection, editing, and rendering.
 
-**Status:** Planning / research phase  
+**Status:** Foundation implementation in progress  
 **Repository:** Private  
 **Brand:** AniMeXe  
 **Current focus:** Build the core automation first. YouTube publishing is intentionally out of scope for the initial implementation.
@@ -814,7 +814,7 @@ These are architecture/integration references. Public availability of an API or 
 
 **AniMeXe is in the planning/research stage.**
 
-No production pipeline has been implemented yet.
+The foundation implementation has started. The first runnable slice is the Python package, CLI, persistent JSON state, scheduler planner, normalized provider boundary, LocalProvider, tests, and GitHub Actions CI.
 
 ### Next implementation milestone
 
@@ -847,17 +847,19 @@ The implementation now follows the practical execution pattern proven in YTAutoP
 1. Foundation and CLI.
 2. Persistent anime/episode/scheduler state.
 3. AniList/Jikan metadata normalization.
-4. Kitsune provider adapter.
-5. Local/manual episode input boundary.
-6. FFprobe, scene detection, frame extraction, and transcript analysis.
-7. Story understanding and original explanation generation.
-8. Local/free TTS with sentence-level timing.
-9. Narration-to-scene matching and declarative timeline generation.
-10. BGM/SFX, subtitles, source-audio mute, and FFmpeg rendering.
-11. Validation and machine-readable artifacts.
-12. Multi-anime scheduler with independent episode queues.
-13. GitHub Actions worker, caching, checkpoints, artifacts, and persistent state commits.
-14. Publishing and playlist automation only after production is stable.
+4. Provider foundation and normalized media models.
+5. Kuhi primary provider.
+6. Anivexa secondary provider.
+7. Local/manual episode input boundary.
+8. FFprobe, scene detection, frame extraction, and transcript analysis.
+9. Story understanding and original explanation generation.
+10. Local/free TTS with sentence-level timing.
+11. Narration-to-scene matching and declarative timeline generation.
+12. BGM/SFX, subtitles, source-audio mute, and FFmpeg rendering.
+13. Validation and machine-readable artifacts.
+14. Multi-anime scheduler, discovery, and episode monitoring.
+15. GitHub Actions worker, caching, checkpoints, artifacts, and persistent state commits.
+16. Publishing and playlist automation only after production is stable.
 
 ### GitHub Actions operating model
 
