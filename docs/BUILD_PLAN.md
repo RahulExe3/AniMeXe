@@ -285,6 +285,10 @@ Completed in the current implementation slice:
 - schema-versioned JSON state;
 - atomic state writes;
 - first scheduler planner;
-- initial tests.
+- normalized provider models;
+- provider interface and registry;
+- LocalProvider input adapter;
+- provider tests;
+- GitHub Actions CI with compile and test checks.
 
-Next implementation slice: **provider foundation + LocalProvider**, followed by the Kuhi adapter.
+Next implementation slice: **metadata normalization and the verified Kuhi integration boundary**.
