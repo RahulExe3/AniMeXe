@@ -317,6 +317,38 @@ The research phase identified:
 
 The architecture therefore separates **metadata discovery**, **media acquisition**, and **media processing**.
 
+
+
+### Temporary media and storage policy
+
+AniMeXe must not permanently store full source episodes. Provider media should be treated as disposable processing input.
+
+Preferred flow:
+
+~~~text
+Provider/source reference
+        ↓
+Stream or fetch media incrementally
+        ↓
+Temporary workspace/chunks
+        ↓
+Analyze episode and identify required scenes
+        ↓
+Extract only required clips
+        ↓
+Generate narration + timeline
+        ↓
+Render final video
+        ↓
+Validate output
+        ↓
+Delete source chunks and unnecessary intermediates
+~~~
+
+The processing layer may use temporary disk space when required by FFmpeg, scene detection, seeking, or rendering, but the complete source episode must not become persistent project storage. Temporary media is deleted after a successful job, and failed jobs should clean up safely while preserving only the checkpoints and small metadata needed for retry.
+
+This keeps GitHub Actions and other workers from accumulating episode files while preserving reliable checkpointed processing. If a provider supports range requests, HLS/DASH segments, or timestamp-based extraction, the media adapter should prefer targeted retrieval over downloading the complete episode.
+
 ## 10. Episode analysis
 
 ### 6.1 Technical inspection
