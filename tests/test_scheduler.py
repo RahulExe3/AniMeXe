@@ -29,7 +29,8 @@ def test_scheduler_selects_next_eligible_episode() -> None:
     plans = Scheduler(state).plan(anime, episodes)
 
     assert [(item.anime_id, item.episode_number) for item in plans] == [
-        ("b", 2)
+        ("b", 2),
+        ("a", 3),
     ]
 
 
