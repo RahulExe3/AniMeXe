@@ -105,3 +105,59 @@ class SchedulerState:
 
 def to_dict(value: Any) -> dict[str, Any]:
     return asdict(value)
+
+
+@dataclass(frozen=True)
+class EpisodeRef:
+    """Provider-independent reference to one anime episode."""
+
+    anime_id: str
+    season: int
+    episode: int
+    language: str = "sub"
+    external_id: str | None = None
+
+    def validate(self) -> None:
+        if not self.anime_id.strip():
+            raise ValueError("episode ref anime_id cannot be empty")
+        if self.season < 1:
+            raise ValueError("episode ref season must be >= 1")
+        if self.episode < 1:
+            raise ValueError("episode ref episode must be >= 1")
+
+
+@dataclass(frozen=True)
+class MediaSource:
+    """Normalized media source consumed by the processing layer."""
+
+    provider: str
+    protocol: str
+    reference: str
+    quality: str | None = None
+    language: str = "sub"
+    subtitles: tuple[dict[str, Any], ...] = ()
+    intro: dict[str, float] | None = None
+    outro: dict[str, float] | None = None
+    capabilities: tuple[str, ...] = ()
+
+    def validate(self) -> None:
+        if not self.provider.strip():
+            raise ValueError("media source provider cannot be empty")
+        if self.protocol not in {"file", "hls", "dash", "other"}:
+            raise ValueError(f"unsupported media protocol: {self.protocol}")
+        if not self.reference.strip():
+            raise ValueError("media source reference cannot be empty")
+
+
+@dataclass(frozen=True)
+class EpisodeAvailability:
+    """Explicitly separates catalog/metadata state from usable media state."""
+
+    metadata_exists: bool = False
+    catalog_exists: bool = False
+    source_resolved: bool = False
+    media_usable: bool = False
+    processable: bool = False
+    provider_status: str = "AVAILABLE"
+    checked_at: str = field(default_factory=utc_now)
+    error: str | None = None
