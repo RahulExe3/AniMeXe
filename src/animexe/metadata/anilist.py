@@ -111,7 +111,11 @@ class AniListClient:
         titles = self._titles(media.get("title") or {})
         title = (media.get("title") or {}).get("userPreferred") or titles[0]
         item = AnimeMetadata(
-            id=f"anilist:{media['id']}",
+            id=(
+                f"mal:{media['idMal']}"
+                if media.get("idMal")
+                else f"anilist:{media['id']}"
+            ),
             title=title,
             titles=titles,
             anilist_id=media.get("id"),
