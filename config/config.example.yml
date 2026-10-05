@@ -22,6 +22,9 @@ scheduler:
 episode:
   input_mode: local_or_provider
   scene_detection: true
+  scene_threshold: 27.0
+  scene_min_duration: 0.5
+  scene_frame_width: 640
   transcript: auto
 
 narration:
