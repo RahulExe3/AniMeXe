@@ -77,6 +77,7 @@ class EpisodeRecord:
     provider: str | None = None
     source_reference: str | None = None
     render_output: str | None = None
+    analysis_manifest: str | None = None
     created_at: str = field(default_factory=utc_now)
     updated_at: str = field(default_factory=utc_now)
 
