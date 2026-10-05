@@ -98,6 +98,8 @@ class StateStore:
         for item in self._read_json("episodes").get("items", []):
             if anime_id is not None and item.get("anime_id") != anime_id:
                 continue
+            item = dict(item)
+            item.setdefault("analysis_manifest", None)
             record = EpisodeRecord(**item)
             record.validate()
             records.append(record)
