@@ -34,7 +34,7 @@ A metadata provider may say that Episode 12 exists without proving that any usab
 
 **Repository:** `aryaniiil/anime-api`
 
-**Role:** Primary external media-provider reference and first planned multi-provider integration.
+**Role:** Primary external provider integration target. The first implementation slice covers Kuhi's catalog/health boundary; source extraction remains a separate authorized-media boundary.
 
 Kuhi became the strongest current candidate during the September 2026 research pass because it has a recent native-provider architecture rather than relying entirely on one old upstream API. Its recent commits added a native provider foundation, multiple independent provider adapters, provider status reporting, provider selection, and a race-based extractor.
 
@@ -67,7 +67,7 @@ Kuhi is the best current fit for AniMeXe because it demonstrates:
 - recent maintenance in 2026;
 - a Python implementation that aligns naturally with AniMeXe's Python-first orchestration.
 
-**Important:** Kuhi is a reference/integration target, not a permanent dependency. The AniMeXe provider interface must remain independent of Kuhi's endpoint or internal module names.
+**Important:** Kuhi is an integration target, not a permanent dependency. AniMeXe currently integrates its search/info/episode-catalog/provider-health contract while intentionally leaving stream extraction outside the core adapter until an authorized media source is selected. The provider interface must remain independent of Kuhi's endpoint or internal module names.
 
 ---
 
@@ -617,7 +617,16 @@ Implement the normalized interface and LocalProvider first.
 
 ### Stage 2
 
-Implement the Kuhi adapter around the verified public contract.
+Implement the Kuhi catalog/health adapter around the verified public contract.
+
+Current implementation:
+- normalized search;
+- normalized anime details;
+- Sub/Dub episode catalogs;
+- provider health;
+- explicit episode availability state.
+
+Source extraction is intentionally not coupled into the processing pipeline yet.
 
 ### Stage 3
 
