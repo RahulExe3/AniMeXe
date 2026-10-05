@@ -4,8 +4,10 @@
 - Python package and CLI.
 - Configuration and workspace management.
 - Persistent state model.
-- Scheduler unit tests.
+- Anime library model.
 - Provider interface.
+- Discovery/release-state model.
+- Scheduler unit tests.
 
 ## Next — first usable episode
 - Local/manual episode input.
@@ -19,6 +21,9 @@
 - FFmpeg render and validation.
 
 ## Then — provider and automation
+- Anime discovery and release-status refresh.
+- Episode availability monitoring.
+- Automatic candidate-pool and active-slot management.
 - Kitsune adapter.
 - Provider health and fallback.
 - GitHub Actions analyze/render workflows.
@@ -28,6 +33,9 @@
 - Persistent state commits.
 
 ## Scale — multi-anime
+- Automatic active-slot selection up to four anime.
+- Dynamic replacement when an anime finishes, pauses, catches up, or becomes unavailable.
+- Automatic re-entry when a new episode is detected.
 - Four active anime.
 - Two successful outputs per day.
 - Balanced, Priority, and Flexible scheduling.
