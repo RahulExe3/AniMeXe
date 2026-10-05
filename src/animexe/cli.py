@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from .analysis import EpisodeInspector, InspectionError
 from .config import load_config
 from .logging import configure_logging
 from .metadata import MetadataLibrary, MetadataService
@@ -49,6 +50,21 @@ def _build_parser() -> argparse.ArgumentParser:
     episode_sub = episode.add_subparsers(dest="episode_command", required=True)
     episode_list = episode_sub.add_parser("list", help="list episodes")
     episode_list.add_argument("--anime-id")
+
+    episode_inspect = episode_sub.add_parser(
+        "inspect",
+        help="run ffprobe inspection and write an analysis manifest",
+    )
+    episode_inspect.add_argument("input_path", type=Path)
+    episode_inspect.add_argument("--anime-id")
+    episode_inspect.add_argument("--episode-number", type=int)
+    episode_inspect.add_argument("--season", type=int, default=1)
+    episode_inspect.add_argument("--output", type=Path)
+    episode_inspect.add_argument(
+        "--no-hash-input",
+        action="store_true",
+        help="skip the full SHA-256 input fingerprint",
+    )
 
     sub.add_parser("plan", help="show the scheduler's next job plan")
 
@@ -127,6 +143,62 @@ def main() -> None:
             _print_json(
                 [item.__dict__ for item in store.list_episodes(args.anime_id)]
             )
+            return
+
+        if args.episode_command == "inspect":
+            if args.episode_number is not None and not args.anime_id:
+                parser.error("--anime-id is required with --episode-number")
+            if args.season < 1:
+                parser.error("--season must be >= 1")
+            if args.episode_number is not None and args.episode_number < 1:
+                parser.error("--episode-number must be >= 1")
+
+            episode_id = None
+            if args.anime_id:
+                number = args.episode_number or 1
+                episode_id = (
+                    f"{args.anime_id}-s{args.season}-e{number}"
+                )
+
+            inspector = EpisodeInspector()
+            try:
+                manifest = inspector.inspect(
+                    args.input_path,
+                    episode_id=episode_id,
+                    hash_input=not args.no_hash_input,
+                )
+            except InspectionError as exc:
+                parser.error(str(exc))
+
+            output_path = args.output or (
+                paths.workspace
+                / "analysis"
+                / f"{args.input_path.stem}.analysis.json"
+            )
+            manifest.write(output_path)
+
+            if args.anime_id:
+                assert args.episode_number is not None
+                existing = {
+                    item.id: item
+                    for item in store.list_episodes(args.anime_id)
+                }.get(episode_id)
+                record = existing or EpisodeRecord(
+                    id=episode_id,
+                    anime_id=args.anime_id,
+                    episode_number=args.episode_number,
+                )
+                record.status = "PROCESSING"
+                record.current_checkpoint = "inspected"
+                record.failure_reason = None
+                record.provider = "local"
+                record.source_reference = str(
+                    args.input_path.expanduser().resolve()
+                )
+                record.analysis_manifest = str(output_path)
+                store.save_episode(record)
+
+            _print_json(manifest.to_dict() | {"manifest_path": str(output_path)})
             return
 
     if args.command == "plan":
