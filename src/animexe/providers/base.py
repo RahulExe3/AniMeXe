@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
+from ..metadata.models import AnimeMetadata
 from ..models import EpisodeAvailability, EpisodeRef, MediaSource, utc_now
 
 
@@ -21,11 +22,11 @@ class Provider(ABC):
     name: str
 
     @abstractmethod
-    def search(self, query: str) -> list[dict[str, Any]]:
+    def search(self, query: str) -> list[AnimeMetadata]:
         raise NotImplementedError
 
     @abstractmethod
-    def get_anime(self, anime_id: str) -> dict[str, Any]:
+    def get_anime(self, anime_id: str) -> AnimeMetadata:
         raise NotImplementedError
 
     @abstractmethod
