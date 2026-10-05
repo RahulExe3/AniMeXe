@@ -58,7 +58,7 @@ class JikanClient:
         image = ((item.get("images") or {}).get("jpg") or {}).get("large_image_url")             or ((item.get("images") or {}).get("jpg") or {}).get("image_url")
 
         metadata = AnimeMetadata(
-            id=f"jikan:{item['mal_id']}",
+            id=f"mal:{item['mal_id']}",
             title=title,
             titles=titles,
             mal_id=item.get("mal_id"),
