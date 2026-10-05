@@ -761,6 +761,12 @@ No production pipeline has been implemented yet.
 
 After that works reliably, add provider automation, playlist management, publishing, and larger-scale processing.
 
+## Source of truth
+
+**The AniMeXe repository is the source of truth for this project.** The README and documentation in this repository should be treated as the canonical record of AniMeXe's architecture, goals, decisions, constraints, implementation status, and planned behavior. Future sessions should read and follow the repository documentation before making assumptions about the project. If a conversation decision changes the architecture or behavior, update the repository documentation so the repo remains the single source of truth.
+
+This is intentional: chat history is context, but the repository is the persistent project memory.
+
 ## Project principle
 
 **Build the engine once. Let the scheduler decide what runs next.**
