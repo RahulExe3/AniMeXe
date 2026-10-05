@@ -5,7 +5,7 @@
 **Status:** Foundation implementation in progress  
 **Repository:** Private  
 **Brand:** AniMeXe  
-**Current focus:** Build the core automation first. YouTube publishing is intentionally out of scope for the initial implementation.
+**Current focus:** Build the core automation first. The runnable foundation now includes metadata/provider boundaries and the first episode-analysis checkpoint. YouTube publishing is intentionally out of scope for the initial implementation.
 
 ## 1. Vision
 
@@ -351,7 +351,7 @@ This keeps GitHub Actions and other workers from accumulating episode files whil
 
 ## 10. Episode analysis
 
-### 6.1 Technical inspection
+### 10.1 Technical inspection
 
 Extract:
 
@@ -366,7 +366,7 @@ Extract:
 
 FFmpeg is the primary media-processing dependency.
 
-### 6.2 Scene detection
+### 10.2 Scene detection
 
 Use PySceneDetect/OpenCV or an equivalent detector to identify hard cuts and create a scene index.
 
@@ -387,7 +387,7 @@ Each scene should retain:
 - optional visual embedding
 - optional transcript overlap
 
-### 6.3 Transcript extraction
+### 10.3 Transcript extraction
 
 If subtitles/audio are available, extract them for analysis.
 
@@ -812,9 +812,11 @@ These are architecture/integration references. Public availability of an API or 
 
 ## 26. Current status
 
-**AniMeXe is in the planning/research stage.**
+**AniMeXe is in active foundation implementation.**
 
-The foundation implementation has started. The first runnable slice is the Python package, CLI, persistent JSON state, scheduler planner, normalized provider boundary, LocalProvider, tests, and GitHub Actions CI.
+The repository now contains a runnable Python package, CLI, persistent JSON state, scheduler planner, normalized provider boundary, LocalProvider, AniList/Jikan metadata, Kuhi catalog/health integration, GitHub Actions CI, and the first episode-analysis checkpoint. A supplied local episode can be inspected with ffprobe and persisted as a schema-versioned analysis manifest.
+
+See `docs/ANALYSIS.md` for the current inspection contract and the next scene-indexing step.
 
 ### Next implementation milestone
 
