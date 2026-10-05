@@ -3,8 +3,9 @@ project:
   language: hinglish
 
 provider:
-  name: kitsune
-  api_base_url: ${KITSUNE_API_BASE_URL}
+  # Kuhi / anime-api is the current primary external provider target.
+  name: kuhi
+  api_base_url: ${KUHI_API_BASE_URL}
   language: sub
 
 scheduler:
