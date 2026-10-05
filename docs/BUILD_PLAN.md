@@ -80,6 +80,19 @@ Every expensive stage writes a checkpoint manifest containing input fingerprint,
 
 Example recovery state: input complete, metadata complete, scenes complete, transcript complete, story complete, script complete, TTS failed. The next run starts at TTS.
 
+
+
+## 4.5 — Temporary media strategy
+Source episodes are processing inputs, not permanent assets. The media boundary should prefer streaming, range requests, HLS/DASH segment retrieval, or targeted timestamp extraction when the provider supports them. A full episode may be materialized temporarily when a processing stage requires random access, but it must live only in the worker workspace.
+
+The target lifecycle is:
+
+provider source -> temporary media/chunks -> analysis -> required scene clips -> narration/timeline -> final render -> validation -> cleanup.
+
+After successful rendering, delete the source episode, unused chunks, and unnecessary intermediates. Preserve only the final output and compact manifests/checkpoints required by the configured retention policy. Failed jobs should clean up safely without deleting the checkpoint/state needed to resume.
+
+This policy prevents episode files from accumulating in GitHub Actions or other workers while keeping the pipeline reliable. The renderer and analysis stages must never assume that the original full episode remains available after the job completes.
+
 ## 5. Persistent state
 Initial Git-backed state files:
 - data/anime.json
