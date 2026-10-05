@@ -15,8 +15,16 @@ class MetadataService:
     jikan: JikanClient
 
     @classmethod
-    def create(cls) -> "MetadataService":
-        return cls(AniListClient(), JikanClient())
+    def create(
+        cls,
+        *,
+        anilist_endpoint: str | None = None,
+        jikan_base_url: str | None = None,
+    ) -> "MetadataService":
+        return cls(
+            AniListClient(endpoint=anilist_endpoint),
+            JikanClient(endpoint=jikan_base_url),
+        )
 
     def search(self, query: str, limit: int = 10) -> list[MetadataResult]:
         results: list[MetadataResult] = []
