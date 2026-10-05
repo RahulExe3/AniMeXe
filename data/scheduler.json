@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "max_active_anime": 4,
+  "daily_output_limit": 2,
+  "strategy": "balanced",
+  "successful_outputs_today": 0,
+  "last_reset_date": null,
+  "last_plan_at": null,
+  "history": []
+}
