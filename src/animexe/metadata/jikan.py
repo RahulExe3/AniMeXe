@@ -44,6 +44,14 @@ class JikanClient:
             return "PAUSED"
         return "UNKNOWN"
 
+    def _duration_minutes(self, value: Any) -> int | None:
+        if value is None:
+            return None
+        if isinstance(value, int):
+            return value
+        digits = "".join(character for character in str(value) if character.isdigit())
+        return int(digits) if digits else None
+
     def _normalize(self, item: dict[str, Any]) -> AnimeMetadata:
         titles = self._titles(item)
         title = item.get("title") or (titles[0] if titles else "")
@@ -60,7 +68,7 @@ class JikanClient:
             season=item.get("season"),
             season_year=item.get("year"),
             episodes=item.get("episodes"),
-            duration_minutes=item.get("duration"),
+            duration_minutes=self._duration_minutes(item.get("duration")),
             start_date=item.get("aired", {}).get("from"),
             end_date=item.get("aired", {}).get("to"),
             description=item.get("synopsis"),
