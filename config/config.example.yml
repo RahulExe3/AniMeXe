@@ -1,0 +1,42 @@
+project:
+  name: AniMeXe
+  language: hinglish
+
+provider:
+  name: kitsune
+  api_base_url: ${KITSUNE_API_BASE_URL}
+  language: sub
+
+scheduler:
+  max_active_anime: 4
+  daily_output_limit: 2
+  count_mode: successful_outputs
+  strategy: balanced
+
+episode:
+  input_mode: local_or_provider
+  scene_detection: true
+  transcript: auto
+
+narration:
+  style: conversational
+  language: hinglish
+  speed: 1.0
+
+video:
+  width: 1920
+  height: 1080
+  fps: 30
+  max_clip_duration: 8
+
+audio:
+  mute_source: true
+  bgm: true
+  sfx: optional
+
+subtitles:
+  enabled: true
+  burn_in: true
+
+publishing:
+  enabled: false
