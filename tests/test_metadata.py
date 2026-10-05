@@ -43,7 +43,7 @@ def test_anilist_normalizes_identity_and_release_state() -> None:
     client = AniListClient(transport=transport)
     item = client.get_anime(123)
 
-    assert item.id == "anilist:123"
+    assert item.id == "mal:456"
     assert item.mal_id == 456
     assert item.release_state == "RELEASING"
     assert item.season_year == 2026
@@ -75,7 +75,7 @@ def test_jikan_search_normalizes_status() -> None:
     client = JikanClient(transport=transport)
     item = client.search("Demo")[0]
 
-    assert item.id == "jikan:456"
+    assert item.id == "mal:456"
     assert item.release_state == "FINISHED"
     assert item.episodes == 12
     assert item.cover_image == "https://img"
