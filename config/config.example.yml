@@ -8,6 +8,11 @@ provider:
   api_base_url: ${KUHI_API_BASE_URL}
   language: sub
 
+metadata:
+  anilist_endpoint: https://graphql.anilist.co
+  jikan_base_url: https://api.jikan.moe/v4
+  search_limit: 10
+
 scheduler:
   max_active_anime: 4
   daily_output_limit: 2
