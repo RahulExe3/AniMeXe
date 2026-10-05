@@ -4,7 +4,9 @@ import argparse
 import json
 from pathlib import Path
 
+from .config import load_config
 from .logging import configure_logging
+from .metadata import MetadataService
 from .models import AnimeRecord, EpisodeRecord
 from .paths import ProjectPaths
 from .scheduler import Scheduler
@@ -49,6 +51,17 @@ def _build_parser() -> argparse.ArgumentParser:
     episode_list.add_argument("--anime-id")
 
     sub.add_parser("plan", help="show the scheduler's next job plan")
+
+    metadata = sub.add_parser("metadata", help="query normalized anime metadata")
+    metadata_sub = metadata.add_subparsers(dest="metadata_command", required=True)
+
+    metadata_search = metadata_sub.add_parser("search", help="search anime metadata")
+    metadata_search.add_argument("query")
+    metadata_search.add_argument("--limit", type=int, default=None)
+
+    metadata_get = metadata_sub.add_parser("get", help="fetch one anime by metadata provider id")
+    metadata_get.add_argument("provider", choices=("anilist", "jikan"))
+    metadata_get.add_argument("id")
 
     return parser
 
@@ -118,5 +131,45 @@ def main() -> None:
         plans = planner.plan(store.list_anime(), store.list_episodes())
         _print_json([plan.__dict__ for plan in plans])
         return
+
+    if args.command == "metadata":
+        config_path = paths.config / "config.yml"
+        if not config_path.exists():
+            config_path = paths.config / "config.example.yml"
+        app_config = load_config(config_path)
+        service = MetadataService.create(
+            anilist_endpoint=app_config.metadata.anilist_endpoint,
+            jikan_base_url=app_config.metadata.jikan_base_url,
+        )
+
+        if args.metadata_command == "search":
+            limit = args.limit or app_config.metadata.search_limit
+            results = service.search(args.query, limit=limit)
+            _print_json([
+                {
+                    "provider": result.provider,
+                    "error": result.error,
+                    "metadata": (
+                        None
+                        if result.metadata is None
+                        else {
+                            key: value
+                            for key, value in result.metadata.__dict__.items()
+                            if key != "raw"
+                        }
+                    ),
+                }
+                for result in results
+            ])
+            return
+
+        if args.metadata_command == "get":
+            metadata = service.get_anime(args.provider, args.id)
+            _print_json({
+                key: value
+                for key, value in metadata.__dict__.items()
+                if key != "raw"
+            })
+            return
 
     parser.error("unsupported command")
