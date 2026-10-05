@@ -38,7 +38,9 @@ The system is modular so anime metadata, episode availability, media input, narr
 
 ## 3. Multi-anime orchestration
 
-AniMeXe is not a one-anime-at-a-time pipeline. It maintains independent episode progress for multiple active anime and uses a central scheduler to decide which eligible episode jobs should run.
+AniMeXe is not a one-anime-at-a-time pipeline. It maintains an anime library, monitors release and episode availability, automatically builds an eligible candidate pool, and uses a central scheduler to decide which episode jobs should run.
+
+The active-anime limit is a capacity limit, not a requirement for the user to manually choose four anime. AniMeXe can automatically fill and refill active slots from the library. Manual selection is an optional override.
 
 Initial target:
 
@@ -60,13 +62,28 @@ With two daily output slots, AniMeXe may select two different anime on one day a
 
 Episode order is enforced independently inside each anime. JJK must progress 1 → 2 → 3 → 4, while Demon Slayer can independently progress 1 → 2 → 3 → 4 → 5 → 6 → 7.
 
+### Anime library and release monitoring
+
+The anime library is the persistent set of anime/season records known to AniMeXe. New anime may enter through automatic discovery or explicit manual addition. Discovery does not automatically consume an active slot.
+
+AniMeXe tracks release state separately from production state. A not-yet-released anime must not consume an active slot. When its premiere becomes available, it becomes eligible for consideration. An airing anime that has caught up to its latest available episode remains in the library as WAITING_FOR_NEXT_EPISODE rather than blocking an active slot.
+
+For airing anime, AniMeXe periodically refreshes configured metadata providers and detects newly available episodes. A newly detected episode becomes PENDING when episode continuity and other eligibility rules permit it. Temporary provider failures must not be treated as evidence that no episode exists.
+
+The monitor should persist latest known episode, next expected episode, release status, next airing time when available, last refresh, provider observation, and availability errors.
+
 ### Anime state
 
 Each anime/season maintains persistent state including:
 
 - anime identifier
 - title and season
-- active/paused/completed status
+- discovery source
+- release/airing status
+- latest known episode
+- next expected episode
+- next airing timestamp when available
+- active/paused/completed/waiting status
 - next eligible episode
 - completed episodes
 - failed episodes
@@ -75,6 +92,8 @@ Each anime/season maintains persistent state including:
 - playlist identifier
 
 ### Intelligent scheduler
+
+The scheduler first fills available active slots from the eligible candidate pool, up to MAX_ACTIVE_ANIME. When an active anime finishes, pauses, becomes unavailable, or catches up to an airing schedule, its slot may be filled by another eligible candidate. When a waiting airing anime receives a new episode, it returns to the candidate pool and may become active again according to the configured strategy.
 
 The scheduler chooses jobs from eligible anime using configurable signals:
 
@@ -155,6 +174,16 @@ State should track three levels:
 
 ~~~text
                          AniMeXe Controller
+                                │
+                         Anime Discovery
+                                │
+                         Release Monitor
+                                │
+                         Candidate Pool
+                                │
+                         Active Slots ≤ 4
+                                │
+                                ↓
                                 │
              ┌──────────────────┴──────────────────┐
              ↓                                     ↓
@@ -774,6 +803,10 @@ This is intentional: chat history is context, but the repository is the persiste
 AniMeXe should ultimately manage multiple anime independently, preserve episode continuity, intelligently distribute daily production slots, automatically organize published episodes into playlists, and turn eligible episode inputs into complete narrated explanation videos with minimal manual intervention.
 
 ## 27. Current implementation blueprint
+
+The anime library, release monitor, candidate pool, and active-slot manager are first-class parts of the scheduler. Four is the maximum number of active production candidates, not a fixed list supplied by the user.
+
+Airing anime are monitored even when waiting for their next episode. A newly detected episode re-enters the scheduling pool automatically. Not-yet-released anime remain in the library without consuming active capacity.
 
 The implementation now follows the practical execution pattern proven in YTAutoPilot while keeping AniMeXe modular and provider-agnostic.
 
