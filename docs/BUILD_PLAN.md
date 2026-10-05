@@ -39,11 +39,16 @@ Episode progression must remain independent per anime. A failed episode remains 
 ### Phase 2 — Metadata
 Implement AniList identity lookup, Jikan fallback, season/episode normalization, and provider-independent IDs.
 
-### Phase 3 — Kitsune provider
-Add src/providers/kitsune as the first external episode-provider adapter. It should normalize search, anime details, episode lists, source information, subtitles, and intro/outro information into AniMeXe objects.
+### Phase 3 — Provider foundation
+Create the provider interface, normalized EpisodeRef/EpisodeAvailability/MediaSource models, provider registry, health states, caching boundaries, retry/backoff handling, and LocalProvider fixtures.
 
-The Kitsune API base URL must be configurable. Kitsune-specific response fields must never leak into the renderer or scheduler.
+### Phase 4 — Primary external provider
+Implement `src/providers/kuhi` against the verified Kuhi/anime-api contract. Prefer its native provider layer rather than its legacy Miruro fallback. Validate title/season matching, episode continuity, source resolution, media usability, subtitles, and provider health.
 
+### Phase 5 — Secondary provider
+Implement `src/providers/anivexa` as the first external fallback/reference integration. Reuse AniMeXe's normalized models; do not leak Anivexa-specific response structures into the scheduler or renderer.
+
+### Phase 6 — Local/manual input
 ### Phase 4 — Media input
 Support a manually supplied local episode file as the mandatory development path. Provider-resolved media enters through the same normalized MediaInput boundary.
 
