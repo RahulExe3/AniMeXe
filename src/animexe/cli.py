@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .config import load_config
 from .logging import configure_logging
-from .metadata import MetadataService
+from .metadata import MetadataLibrary, MetadataService
 from .models import AnimeRecord, EpisodeRecord
 from .paths import ProjectPaths
 from .scheduler import Scheduler
@@ -62,6 +62,10 @@ def _build_parser() -> argparse.ArgumentParser:
     metadata_get = metadata_sub.add_parser("get", help="fetch one anime by metadata provider id")
     metadata_get.add_argument("provider", choices=("anilist", "jikan"))
     metadata_get.add_argument("id")
+
+    metadata_sync = metadata_sub.add_parser("sync", help="fetch metadata and upsert it into the anime library")
+    metadata_sync.add_argument("provider", choices=("anilist", "jikan"))
+    metadata_sync.add_argument("id")
 
     return parser
 
@@ -170,6 +174,12 @@ def main() -> None:
                 for key, value in metadata.__dict__.items()
                 if key != "raw"
             })
+            return
+
+        if args.metadata_command == "sync":
+            metadata = service.get_anime(args.provider, args.id)
+            record = MetadataLibrary(store).upsert(metadata)
+            _print_json(record.__dict__)
             return
 
     parser.error("unsupported command")
