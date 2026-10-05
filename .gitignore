@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.env
+.env.*
+dist/
+build/
+*.egg-info/
+
+# Runtime workspace and media
+workspace/*
+!workspace/**/.gitkeep
+*.mp4
+*.mkv
+*.webm
+*.mov
+*.wav
+*.mp3
+*.flac
+
+# Local analysis caches
+.cache/
