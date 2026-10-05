@@ -24,7 +24,10 @@
 - Anime discovery and release-status refresh.
 - Episode availability monitoring.
 - Automatic candidate-pool and active-slot management.
-- Kitsune adapter.
+- Kuhi primary adapter.
+- Anivexa secondary adapter.
+- Provider health, source usability, and fallback scoring.
+- Kitsune compatibility kept as a legacy/reference adapter.
 - Provider health and fallback.
 - GitHub Actions analyze/render workflows.
 - Warm dependency/model caches.
