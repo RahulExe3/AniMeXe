@@ -772,3 +772,73 @@ This is intentional: chat history is context, but the repository is the persiste
 **Build the engine once. Let the scheduler decide what runs next.**
 
 AniMeXe should ultimately manage multiple anime independently, preserve episode continuity, intelligently distribute daily production slots, automatically organize published episodes into playlists, and turn eligible episode inputs into complete narrated explanation videos with minimal manual intervention.
+
+## 27. Current implementation blueprint
+
+The implementation now follows the practical execution pattern proven in YTAutoPilot while keeping AniMeXe modular and provider-agnostic.
+
+### Build order
+
+1. Foundation and CLI.
+2. Persistent anime/episode/scheduler state.
+3. AniList/Jikan metadata normalization.
+4. Kitsune provider adapter.
+5. Local/manual episode input boundary.
+6. FFprobe, scene detection, frame extraction, and transcript analysis.
+7. Story understanding and original explanation generation.
+8. Local/free TTS with sentence-level timing.
+9. Narration-to-scene matching and declarative timeline generation.
+10. BGM/SFX, subtitles, source-audio mute, and FFmpeg rendering.
+11. Validation and machine-readable artifacts.
+12. Multi-anime scheduler with independent episode queues.
+13. GitHub Actions worker, caching, checkpoints, artifacts, and persistent state commits.
+14. Publishing and playlist automation only after production is stable.
+
+### GitHub Actions operating model
+
+The first hosted worker will follow:
+
+checkout → restore caches → install/check FFmpeg → load state → schedule → process → validate → upload artifacts → persist state → rebase main → push state.
+
+The workflow will initially expose dry-run, analyze, render, and scheduled modes. YouTube publishing remains disabled.
+
+### YTAutoPilot-derived operational patterns
+
+AniMeXe will reuse the proven ideas of:
+
+- warm Python/model caches;
+- explicit media-tool checks;
+- environment-based configuration;
+- machine-readable manifests;
+- persistent JSON state;
+- workflow artifacts;
+- checkpointed retries;
+- Git-backed state persistence;
+- fetch/rebase/push state commits;
+- clear workflow and visual verification gates.
+
+YTAutoPilot's gaming-specific content and publishing code are not part of AniMeXe.
+
+### Kitsune provider
+
+Kitsune is now the first external episode-provider adapter. The adapter will translate Kitsune-compatible search, anime details, episode lists, source information, subtitles, and intro/outro metadata into AniMeXe's normalized provider contract.
+
+The Kitsune API base URL remains configurable. Provider-specific response fields must not leak into the scheduler, story engine, scene matcher, or renderer.
+
+### Checkpointed episode processing
+
+An episode can resume from its last successful stage instead of restarting from the beginning.
+
+Example:
+
+input ✓ → metadata ✓ → scenes ✓ → transcript ✓ → story ✓ → script ✓ → TTS ✗ → matching pending → render pending
+
+This is required both locally and in GitHub Actions.
+
+For the detailed blueprint, see docs/BUILD_PLAN.md, docs/PROVIDERS.md, docs/SCHEDULER.md, and docs/CI.md.
+
+### First real milestone
+
+The first real milestone is a working multi-anime production engine that can register four anime, maintain independent episode progress, select two successful jobs per day, accept a supplied episode, analyze it, generate an original explanation and narration, match scenes, render a validated MP4, persist the result, resume failed work from checkpoints, and reproduce the process in GitHub Actions.
+
+YouTube publishing is not required for this milestone.
