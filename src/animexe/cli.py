@@ -146,8 +146,8 @@ def main() -> None:
             return
 
         if args.episode_command == "inspect":
-            if args.episode_number is not None and not args.anime_id:
-                parser.error("--anime-id is required with --episode-number")
+            if (args.anime_id is None) != (args.episode_number is None):
+                parser.error("--anime-id and --episode-number must be supplied together")
             if args.season < 1:
                 parser.error("--season must be >= 1")
             if args.episode_number is not None and args.episode_number < 1:
@@ -155,9 +155,9 @@ def main() -> None:
 
             episode_id = None
             if args.anime_id:
-                number = args.episode_number or 1
+                assert args.episode_number is not None
                 episode_id = (
-                    f"{args.anime_id}-s{args.season}-e{number}"
+                    f"{args.anime_id}-s{args.season}-e{args.episode_number}"
                 )
 
             inspector = EpisodeInspector()
