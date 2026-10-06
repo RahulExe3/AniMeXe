@@ -51,12 +51,16 @@ class FFmpegRenderer:
 
         filters: list[str] = []
         video_labels: list[str] = []
+        split_inputs = "".join(f"[src{index}]" for index in range(len(timeline.clips)))
+        filters.append(
+            f"[0:v]split={len(timeline.clips)}{split_inputs}"
+        )
 
         for index, clip in enumerate(timeline.clips):
             label = f"v{index}"
             video_labels.append(f"[{label}]")
             filters.append(
-                f"[0:v]trim=start={clip.source_start_seconds:.3f}:end={clip.source_end_seconds:.3f},"
+                f"[src{index}]trim=start={clip.source_start_seconds:.3f}:end={clip.source_end_seconds:.3f},"
                 f"setpts=PTS-STARTPTS,scale={self.width}:{self.height}:force_original_aspect_ratio=decrease,"
                 f"pad={self.width}:{self.height}:(ow-iw)/2:(oh-ih)/2,fps={self.fps}[{label}]"
             )
