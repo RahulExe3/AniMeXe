@@ -112,6 +112,12 @@ Support a supplied local episode file as the mandatory development path.
 Local media must enter through the same normalized media boundary as external providers so the rest of the pipeline stays provider-agnostic.
 
 ### Phase 7 — Episode analysis
+
+Current sub-checkpoints:
+- **inspected:** ffprobe technical manifest with input fingerprint and stream metadata.
+- **scenes:** PySceneDetect cut detection plus representative-frame extraction.
+- **next:** transcript/subtitle extraction aligned to the scene timeline.
+
 Implement:
 - ffprobe technical inspection;
 - scene detection;
@@ -302,4 +308,4 @@ Completed in the current implementation slice:
 - persisted episode inspection checkpoints;
 - episode inspection tests.
 
-Next implementation slice: **scene detection and representative frame indexing**.
+Next implementation slice: **transcript extraction aligned to the scene index**.
