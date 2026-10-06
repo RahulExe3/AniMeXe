@@ -102,9 +102,12 @@ The adapter must:
 A provider result is not accepted merely because metadata exists.
 
 ### Phase 5 — Anivexa secondary provider
-Implement `src/providers/anivexa` with the same normalized contract.
+**Implemented for catalog/availability:** `src/animexe/providers/anivexa` normalizes Anivexa episode catalogs and explicitly keeps source extraction outside the authorized-media boundary.
 
-Use it as a fallback when Kuhi cannot provide a usable source. Keep strict episode/catalog validation and isolate all Anivexa-specific response details inside the adapter.
+Use it as a fallback when Kuhi cannot confirm the episode. Keep strict episode/catalog validation and isolate all Anivexa-specific response details inside the adapter.
+
+### Phase 5.5 — AniVault secondary provider
+**Implemented for catalog/availability:** `src/animexe/providers/anivault` queries its documented search/info/episode/health endpoints and merges available episode catalog sources.
 
 ### Phase 6 — Local/manual media input
 Support a supplied local episode file as the mandatory development path.
@@ -188,6 +191,7 @@ BGM/SFX mixing and richer creative effects remain follow-up layers.
 Quality gates must reject incomplete or suspicious output.
 
 ### Phase 12 — Anime discovery and scheduler
+Provider probing is now available through `ProviderBroker`; the remaining scheduler work is to consume those probe results during job claiming and to persist provider selection/health history.
 Build:
 - anime library discovery;
 - release monitoring;
