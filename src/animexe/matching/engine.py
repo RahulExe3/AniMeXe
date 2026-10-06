@@ -46,6 +46,7 @@ class SceneMatchManifest:
     source_tts: str
     clips: tuple[NarrationClip, ...]
     total_narration_duration_seconds: float
+    source_edit_plan: str | None = None
     checkpoint: str = "matching"
 
     def to_dict(self) -> dict[str, object]:
@@ -58,6 +59,7 @@ class SceneMatchManifest:
             "source_tts": self.source_tts,
             "clips": [clip.to_dict() for clip in self.clips],
             "total_narration_duration_seconds": self.total_narration_duration_seconds,
+            "source_edit_plan": self.source_edit_plan,
             "checkpoint": self.checkpoint,
         }
 
@@ -106,23 +108,42 @@ class SceneMatcher:
         scenes: SceneAnalysisManifest,
         tts: TTSManifest,
         *,
+        edit_plan: EditPlanManifest | None = None,
         source_scenes: str = "scenes.json",
         source_tts: str = "tts.json",
+        source_edit_plan: str | None = None,
     ) -> SceneMatchManifest:
-        self._validate_inputs(scenes, tts)
+        self._validate_inputs(scenes, tts, edit_plan=edit_plan)
         scene_by_id = {scene.scene_id: scene for scene in scenes.scenes}
+        plan_windows = (
+            {
+                clip.scene_id: (
+                    clip.source_start_seconds,
+                    clip.source_end_seconds,
+                )
+                for clip in edit_plan.clips
+            }
+            if edit_plan is not None
+            else {}
+        )
+        allowed_scene_ids = set(plan_windows)
         scene_order = {scene.scene_id: scene.index for scene in scenes.scenes}
         used: set[str] = set()
         clips: list[NarrationClip] = []
 
         for audio in tts.segments:
             needed = audio.duration_seconds
-            candidate_ids = list(audio.scene_ids)
+            candidate_ids = [
+                scene_id
+                for scene_id in audio.scene_ids
+                if not allowed_scene_ids or scene_id in allowed_scene_ids
+            ]
             if not candidate_ids:
                 candidate_ids = [
                     scene.scene_id
                     for scene in scenes.scenes
-                    if scene.scene_id not in used or self.allow_reuse
+                    if (not allowed_scene_ids or scene.scene_id in allowed_scene_ids)
+                    and (scene.scene_id not in used or self.allow_reuse)
                 ]
 
             explicit = [
@@ -135,6 +156,7 @@ class SceneMatcher:
                 scenes.scenes,
                 used=used,
                 allow_reuse=self.allow_reuse,
+                allowed_scene_ids=allowed_scene_ids or None,
             )
 
             if not ordered:
@@ -150,12 +172,17 @@ class SceneMatcher:
                 if reused and not self.allow_reuse:
                     continue
 
+                available_duration = (
+                    plan_windows.get(scene.scene_id, (scene.start_seconds, scene.end_seconds))[1]
+                    - plan_windows.get(scene.scene_id, (scene.start_seconds, scene.end_seconds))[0]
+                )
                 clip_duration = min(
                     remaining,
                     self.max_clip_duration,
-                    max(0.05, scene.duration_seconds),
+                    max(0.05, available_duration),
                 )
-                start, end = self._window(scene, clip_duration)
+                bounds = plan_windows.get(scene.scene_id)
+                start, end = self._window(scene, clip_duration, bounds=bounds)
                 actual = end - start
                 if actual <= 0.04:
                     continue
@@ -198,12 +225,15 @@ class SceneMatcher:
             source_tts=source_tts,
             clips=tuple(clips),
             total_narration_duration_seconds=round(tts.total_duration_seconds, 3),
+            source_edit_plan=source_edit_plan,
         )
 
     @staticmethod
     def _validate_inputs(
         scenes: SceneAnalysisManifest,
         tts: TTSManifest,
+        *,
+        edit_plan: EditPlanManifest | None = None,
     ) -> None:
         if scenes.input_path != tts.input_path:
             raise MatchError("scene and TTS manifests reference different input files")
@@ -214,6 +244,13 @@ class SceneMatcher:
             raise MatchError("scene manifest contains no scenes")
         if not tts.segments:
             raise MatchError("TTS manifest contains no audio segments")
+        if edit_plan is not None:
+            if edit_plan.input_path != scenes.input_path:
+                raise MatchError("visual edit plan and scene manifest reference different inputs")
+            if edit_plan.input_sha256 and scenes.input_sha256 and edit_plan.input_sha256 != scenes.input_sha256:
+                raise MatchError("visual edit plan and scene fingerprints do not match")
+            if not edit_plan.clips:
+                raise MatchError("visual edit plan contains no clips")
 
     @staticmethod
     def _expand_candidates(
@@ -222,8 +259,13 @@ class SceneMatcher:
         *,
         used: set[str],
         allow_reuse: bool,
+        allowed_scene_ids: set[str] | None = None,
     ) -> list[tuple[SceneRecord, bool]]:
-        all_items = list(all_scenes)
+        all_items = [
+            scene
+            for scene in all_scenes
+            if not allowed_scene_ids or scene.scene_id in allowed_scene_ids
+        ]
         result: list[tuple[SceneRecord, bool]] = []
         seen: set[str] = set()
 
@@ -256,13 +298,19 @@ class SceneMatcher:
         return result
 
     @staticmethod
-    def _window(scene: SceneRecord, duration: float) -> tuple[float, float]:
-        duration = min(duration, scene.duration_seconds)
-        if duration >= scene.duration_seconds - 0.001:
-            return scene.start_seconds, scene.end_seconds
-        center = scene.representative_time_seconds
-        start = max(scene.start_seconds, center - duration / 2.0)
-        end = min(scene.end_seconds, start + duration)
+    def _window(
+        scene: SceneRecord,
+        duration: float,
+        *,
+        bounds: tuple[float, float] | None = None,
+    ) -> tuple[float, float]:
+        lower, upper = bounds or (scene.start_seconds, scene.end_seconds)
+        duration = min(duration, upper - lower)
+        if duration >= upper - lower - 0.001:
+            return lower, upper
+        center = min(max(scene.representative_time_seconds, lower), upper)
+        start = max(lower, center - duration / 2.0)
+        end = min(upper, start + duration)
         if end - start < duration:
-            start = max(scene.start_seconds, end - duration)
+            start = max(lower, end - duration)
         return start, end
