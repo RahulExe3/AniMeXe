@@ -17,6 +17,8 @@ from .analysis import (
     EpisodeStoryManifest,
     ExtractiveStoryAnalyzer,
     StoryAnalysisError,
+    GeminiStoryAnalyzer,
+    GeminiStoryError,
 )
 from .config import load_config
 from .logging import configure_logging
@@ -119,6 +121,12 @@ def _build_parser() -> argparse.ArgumentParser:
     episode_story.add_argument("--episode-number", type=int)
     episode_story.add_argument("--season", type=int, default=1)
     episode_story.add_argument("--output", type=Path)
+    episode_story.add_argument(
+        "--mode",
+        choices=("extractive", "gemini"),
+        default="extractive",
+        help="story analysis backend (default: extractive)",
+    )
 
     sub.add_parser("plan", help="show the scheduler's next job plan")
 
