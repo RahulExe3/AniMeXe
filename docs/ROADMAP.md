@@ -17,11 +17,18 @@
 - Gemini-backed semantic story representation with extractive fallback.
 - Original English/Hinglish narration script with checkpoint validation.
 
-## Next — audio and editing
-- Local/free TTS.
+## Now — audio and editing
+- TTS checkpoint with synthetic test backend.
+- External/local TTS command bridge.
 - Measured narration timing.
-- Scene matching.
-- FFmpeg render and validation.
+- Scene matching manifest with duration-aware scene selection.
+
+## Next — rendering
+- Declarative timeline generation.
+- Clip extraction/rendering.
+- Source-audio mute.
+- Narration mix, BGM/SFX.
+- Subtitles and FFmpeg validation.
 
 ## Then — provider and automation
 - Anime discovery and release-status refresh.
