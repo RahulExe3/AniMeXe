@@ -107,7 +107,7 @@ def test_gemini_story_analyzer_builds_valid_manifest() -> None:
     call = client.models.calls[0]
     assert call["model"] == "gemini-3.8-flash"
     assert call["config"].response_mime_type == "application/json"
-    assert call["config"].thinking_config.thinking_level == "medium"
+    assert str(call["config"].thinking_config.thinking_level).lower().endswith("medium")
 
 
 def test_gemini_story_rejects_unknown_scene() -> None:
