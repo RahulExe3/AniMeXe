@@ -4,7 +4,13 @@ import argparse
 import json
 from pathlib import Path
 
-from .analysis import EpisodeInspector, InspectionError
+from .analysis import (
+    EpisodeAnalysisManifest,
+    EpisodeInspector,
+    InspectionError,
+    SceneDetectionError,
+    SceneIndexer,
+)
 from .config import load_config
 from .logging import configure_logging
 from .metadata import MetadataLibrary, MetadataService
@@ -64,6 +70,22 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-hash-input",
         action="store_true",
         help="skip the full SHA-256 input fingerprint",
+    )
+
+    episode_scenes = episode_sub.add_parser(
+        "scenes",
+        help="detect scenes and extract representative frames",
+    )
+    episode_scenes.add_argument("input_path", type=Path)
+    episode_scenes.add_argument("--analysis-manifest", type=Path)
+    episode_scenes.add_argument("--anime-id")
+    episode_scenes.add_argument("--episode-number", type=int)
+    episode_scenes.add_argument("--season", type=int, default=1)
+    episode_scenes.add_argument("--output", type=Path)
+    episode_scenes.add_argument(
+        "--no-frames",
+        action="store_true",
+        help="build the scene index without extracting representative frames",
     )
 
     sub.add_parser("plan", help="show the scheduler's next job plan")
@@ -199,6 +221,107 @@ def main() -> None:
                 store.save_episode(record)
 
             _print_json(manifest.to_dict() | {"manifest_path": str(output_path)})
+            return
+
+    if args.command == "episode":
+        if args.episode_command == "scenes":
+            if (args.anime_id is None) != (args.episode_number is None):
+                parser.error("--anime-id and --episode-number must be supplied together")
+            if args.season < 1:
+                parser.error("--season must be >= 1")
+            if args.episode_number is not None and args.episode_number < 1:
+                parser.error("--episode-number must be >= 1")
+
+            config_path = paths.config / "config.yml"
+            if not config_path.exists():
+                config_path = paths.config / "config.example.yml"
+            app_config = load_config(config_path)
+            if not app_config.episode.scene_detection:
+                parser.error("episode.scene_detection is disabled in configuration")
+
+            episode_manifest_path = args.analysis_manifest
+            if episode_manifest_path is None:
+                episode_manifest_path = (
+                    paths.workspace
+                    / "analysis"
+                    / f"{args.input_path.stem}.analysis.json"
+                )
+
+            if episode_manifest_path.exists():
+                try:
+                    episode_manifest = EpisodeAnalysisManifest.read(episode_manifest_path)
+                except (OSError, ValueError, TypeError) as exc:
+                    parser.error(f"could not read analysis manifest: {exc}")
+            else:
+                inspector = EpisodeInspector()
+                try:
+                    episode_id = None
+                    if args.anime_id:
+                        assert args.episode_number is not None
+                        episode_id = f"{args.anime_id}-s{args.season}-e{args.episode_number}"
+                    episode_manifest = inspector.inspect(
+                        args.input_path,
+                        episode_id=episode_id,
+                    )
+                    episode_manifest.write(episode_manifest_path)
+                except InspectionError as exc:
+                    parser.error(str(exc))
+
+            output_dir = (
+                args.output.parent
+                if args.output
+                else paths.workspace / "analysis" / args.input_path.stem
+            )
+            scene_manifest_path = args.output or (output_dir / "scenes.json")
+
+            indexer = SceneIndexer(
+                threshold=app_config.episode.scene_threshold,
+                min_scene_duration_seconds=app_config.episode.scene_min_duration,
+                frame_width=app_config.episode.scene_frame_width,
+            )
+            try:
+                scene_manifest = indexer.index(
+                    args.input_path,
+                    output_dir=output_dir,
+                    episode_manifest=episode_manifest,
+                    episode_id=episode_manifest.episode_id,
+                    extract_frames=not args.no_frames,
+                )
+            except SceneDetectionError as exc:
+                parser.error(str(exc))
+
+            scene_manifest.write(scene_manifest_path)
+
+            if args.anime_id:
+                assert args.episode_number is not None
+                episode_id = f"{args.anime_id}-s{args.season}-e{args.episode_number}"
+                existing = {
+                    item.id: item
+                    for item in store.list_episodes(args.anime_id)
+                }.get(episode_id)
+                record = existing or EpisodeRecord(
+                    id=episode_id,
+                    anime_id=args.anime_id,
+                    episode_number=args.episode_number,
+                )
+                record.status = "PROCESSING"
+                record.current_checkpoint = "scenes"
+                record.failure_reason = None
+                record.provider = "local"
+                record.source_reference = str(
+                    args.input_path.expanduser().resolve()
+                )
+                record.analysis_manifest = str(episode_manifest_path)
+                record.scene_manifest = str(scene_manifest_path)
+                store.save_episode(record)
+
+            _print_json(
+                scene_manifest.to_dict()
+                | {
+                    "analysis_manifest_path": str(episode_manifest_path),
+                    "scene_manifest_path": str(scene_manifest_path),
+                }
+            )
             return
 
     if args.command == "plan":
