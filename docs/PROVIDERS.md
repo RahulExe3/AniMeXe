@@ -591,6 +591,34 @@ AniMeXe should not build features intended to bypass access controls or platform
 
 ---
 
+## 17.1 Current runtime configuration
+
+The canonical config supports one primary provider plus optional fallbacks:
+
+```yaml
+provider:
+  name: kuhi
+  api_base_url: ${KUHI_API_BASE_URL}
+  language: sub
+
+provider_fallbacks:
+  - name: anivexa
+    api_base_url: ${ANIVEXA_API_BASE_URL}
+    language: sub
+  - name: anivault
+    api_base_url: ${ANIVAULT_API_BASE_URL}
+    language: sub
+```
+
+Useful commands:
+
+```bash
+python -m animexe provider status
+python -m animexe provider check anilist:21 --episode-number 1 --language sub
+```
+
+GitHub Actions provider smoke testing is manual-only via `.github/workflows/provider-smoke.yml`. Configure the provider endpoint URLs as repository Variables named `KUHI_API_BASE_URL`, `ANIVEXA_API_BASE_URL`, and `ANIVAULT_API_BASE_URL`.
+
 ## 18. Implementation plan
 
 ### Provider foundation
@@ -630,11 +658,17 @@ Source extraction is intentionally not coupled into the processing pipeline yet.
 
 ### Stage 3
 
-Add Anivexa as the first secondary fallback.
+Add Anivexa as the first secondary fallback. **Implemented:** catalog/episode availability adapter with provider-normalized episode references.
 
 ### Stage 4
 
-Add Anivault/other adapters only after the core provider tests are stable.
+Add Anivault/other adapters only after the core provider tests are stable. **Implemented:** AniVault catalog/availability adapter using its documented API catalog endpoints.
+
+### Stage 5
+
+Add provider fan-out and selection. **Implemented:** `ProviderBroker` probes configured external providers concurrently, scores current catalog/availability results, and exposes the strongest catalog candidate without coupling the scheduler to provider-specific response formats.
+
+Source extraction remains an explicit authorized-media boundary. The external projects reviewed during research include routes that perform stream extraction, proxying, decryption, or access-control work; AniMeXe does not copy those mechanisms into its runtime.
 
 ### Stage 5
 
