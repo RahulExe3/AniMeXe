@@ -1212,9 +1212,10 @@ def main() -> None:
                     "detail": health.detail,
                 })
             rendered = json.dumps(result, indent=2, ensure_ascii=False)
-            if args.output:
-                args.output.parent.mkdir(parents=True, exist_ok=True)
-                args.output.write_text(rendered + "\n", encoding="utf-8")
+            output = getattr(args, "output", None)
+            if output:
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_text(rendered + "\n", encoding="utf-8")
             print(rendered)
             return
 
