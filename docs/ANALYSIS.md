@@ -265,3 +265,40 @@ workspace/analysis/<input-name>/
 ```
 
 The story manifest references the transcript and scene manifests used to build it. The next implementation slice is an LLM-backed story explainer that converts this evidence into a structured episode summary suitable for original narration-script generation.
+
+
+## Current Gemini semantic story checkpoint
+
+The story checkpoint now has an optional Gemini backend. It keeps the deterministic extractive pass available while adding genuine multimodal semantic understanding.
+
+Flow:
+
+```text
+input → inspected → scenes + frames → transcript → Gemini story understanding
+```
+
+Gemini receives:
+
+- normalized scene metadata;
+- transcript segments already aligned to scene IDs;
+- representative JPEG frames when available.
+
+The response is requested as structured JSON and validated locally before being persisted. Events must reference real scene IDs, event timing must be valid, importance/confidence must stay in the 0–1 range, and summaries/endings cannot be empty.
+
+Run the offline deterministic pass:
+
+```bash
+python -m animexe episode story /path/to/episode.mkv --mode extractive
+```
+
+Run the Gemini semantic pass:
+
+```bash
+python -m animexe episode story /path/to/episode.mkv --mode gemini
+```
+
+Configuration lives under `llm:` in the project config. The API key is read from the configured environment variable, which defaults to `GEMINI_API_KEY`. Never commit the key.
+
+The resulting `story.json` now carries the richer semantic fields needed by the next stage: episode summary, relationships, ending, narration points, confidence, and the Gemini model identifier.
+
+The next checkpoint is original narration-script generation from this semantic story representation.
