@@ -1,6 +1,6 @@
 # AniMeXe Roadmap
 
-## Now — foundation
+## Completed — foundation
 - Python package and CLI.
 - Configuration and workspace management.
 - Persistent state model.
