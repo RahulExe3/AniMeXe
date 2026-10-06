@@ -36,6 +36,7 @@ llm:
   api_key_env: GEMINI_API_KEY
   temperature: 0.2
   max_output_tokens: 12000
+  thinking_level: medium
   max_frames: 32
 
 episode:
@@ -60,11 +61,20 @@ narration:
 
 tts:
   # synthetic is deterministic and useful for end-to-end pipeline tests.
-  # command bridges to a local/external TTS runner for real voices.
+  # command bridges to a local/external TTS runner.
+  # gemini uses Gemini 3.8 Flash TTS for natural expressive narration.
   provider: synthetic
+  model: gemini-3.8-flash-tts
+  api_key_env: GEMINI_API_KEY
   voice: null
+  style: "natural, conversational, expressive YouTube narrator; clear sentence endings; natural pauses; believable Hinglish delivery"
   command: []
   timeout_seconds: 180
+
+  # Production Gemini TTS example:
+  # provider: gemini
+  # voice: Kore
+
 
 video:
   width: 1920
