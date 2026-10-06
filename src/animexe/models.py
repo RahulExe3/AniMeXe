@@ -84,6 +84,7 @@ class EpisodeRecord:
     script_manifest: str | None = None
     tts_manifest: str | None = None
     matching_manifest: str | None = None
+    timeline_manifest: str | None = None
     created_at: str = field(default_factory=utc_now)
     updated_at: str = field(default_factory=utc_now)
 
