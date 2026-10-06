@@ -614,6 +614,7 @@ def main() -> None:
                         model=app_config.llm.model,
                         api_key_env=app_config.llm.api_key_env,
                         temperature=app_config.llm.temperature,
+                        thinking_level=app_config.llm.thinking_level,
                         max_output_tokens=app_config.llm.max_output_tokens,
                         max_frames=app_config.llm.max_frames,
                     ).analyze(
@@ -725,6 +726,7 @@ def main() -> None:
                     model=app_config.llm.model,
                     api_key_env=app_config.llm.api_key_env,
                     temperature=app_config.llm.temperature,
+                    thinking_level=app_config.llm.thinking_level,
                     max_output_tokens=app_config.llm.max_output_tokens,
                     target_duration_seconds=app_config.narration.target_duration_seconds,
                     min_duration_seconds=app_config.narration.min_duration_seconds,
