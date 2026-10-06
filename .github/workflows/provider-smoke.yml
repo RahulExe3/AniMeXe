@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   provider-smoke:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       KUHI_API_BASE_URL: ${{ vars.KUHI_API_BASE_URL }}
@@ -38,10 +38,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -58,3 +58,12 @@ jobs:
           "${{ inputs.anime_id }}"
           --episode-number "${{ inputs.episode }}"
           --language "${{ inputs.language }}"
+          --output workspace/provider-smoke/provider-report.json
+
+      - name: Upload provider report
+        uses: actions/upload-artifact@v7
+        with:
+          name: provider-smoke-report
+          path: workspace/provider-smoke/provider-report.json
+          if-no-files-found: error
+          retention-days: 7
