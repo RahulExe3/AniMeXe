@@ -145,6 +145,7 @@ def test_generates_hinglish_script() -> None:
     assert manifest.model == "gemini-3.8-flash"
     assert client.models.calls[0]["model"] == "gemini-3.8-flash"
     assert client.models.calls[0]["config"].response_mime_type == "application/json"
+    assert client.models.calls[0]["config"].thinking_config.thinking_level == "medium"
 
 
 def test_generates_english_script_from_same_story() -> None:
