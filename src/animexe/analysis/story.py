@@ -91,7 +91,12 @@ class EpisodeStoryManifest:
     @classmethod
     def read(cls, path: Path) -> "EpisodeStoryManifest":
         payload = json.loads(path.read_text(encoding="utf-8"))
-        evidence = StoryEvidence(**payload["evidence"])
+        evidence_payload = payload["evidence"]
+        evidence = StoryEvidence(
+            characters=tuple(evidence_payload.get("characters", [])),
+            locations=tuple(evidence_payload.get("locations", [])),
+            keywords=tuple(evidence_payload.get("keywords", [])),
+        )
         payload["evidence"] = evidence
         payload["events"] = tuple(
             StoryEvent(
