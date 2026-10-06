@@ -12,6 +12,9 @@ from .analysis import (
     SceneIndexer,
     SubtitleTranscriptExtractor,
     TranscriptError,
+    EpisodeStoryManifest,
+    ExtractiveStoryAnalyzer,
+    StoryAnalysisError,
 )
 from .config import load_config
 from .logging import configure_logging
@@ -101,6 +104,19 @@ def _build_parser() -> argparse.ArgumentParser:
     episode_transcript.add_argument("--episode-number", type=int)
     episode_transcript.add_argument("--season", type=int, default=1)
     episode_transcript.add_argument("--output", type=Path)
+
+    episode_story = episode_sub.add_parser(
+        "story",
+        help="assemble structured story evidence from transcript and scenes",
+    )
+    episode_story.add_argument("input_path", type=Path)
+    episode_story.add_argument("--transcript-manifest", type=Path)
+    episode_story.add_argument("--scene-manifest", type=Path)
+    episode_story.add_argument("--analysis-manifest", type=Path)
+    episode_story.add_argument("--anime-id")
+    episode_story.add_argument("--episode-number", type=int)
+    episode_story.add_argument("--season", type=int, default=1)
+    episode_story.add_argument("--output", type=Path)
 
     sub.add_parser("plan", help="show the scheduler's next job plan")
 
@@ -421,6 +437,93 @@ def main() -> None:
                     "analysis_manifest_path": str(episode_manifest_path),
                     "scene_manifest_path": str(scene_manifest_path),
                     "transcript_manifest_path": str(transcript_manifest_path),
+                }
+            )
+            return
+
+    if args.command == "episode":
+        if args.episode_command == "story":
+            if (args.anime_id is None) != (args.episode_number is None):
+                parser.error("--anime-id and --episode-number must be supplied together")
+            if args.season < 1:
+                parser.error("--season must be >= 1")
+            if args.episode_number is not None and args.episode_number < 1:
+                parser.error("--episode-number must be >= 1")
+
+            transcript_path = args.transcript_manifest or (
+                paths.workspace
+                / "analysis"
+                / args.input_path.stem
+                / "transcript.json"
+            )
+            scene_path = args.scene_manifest or (
+                paths.workspace
+                / "analysis"
+                / args.input_path.stem
+                / "scenes.json"
+            )
+            analysis_path = args.analysis_manifest or (
+                paths.workspace
+                / "analysis"
+                / f"{args.input_path.stem}.analysis.json"
+            )
+
+            try:
+                transcript_manifest = TranscriptAnalysisManifest.read(transcript_path)
+                scene_manifest = SceneAnalysisManifest.read(scene_path)
+                EpisodeAnalysisManifest.read(analysis_path)
+            except (OSError, ValueError, TypeError) as exc:
+                parser.error(f"could not read analysis manifests: {exc}")
+
+            output_path = args.output or (
+                paths.workspace
+                / "analysis"
+                / args.input_path.stem
+                / "story.json"
+            )
+
+            try:
+                story_manifest = ExtractiveStoryAnalyzer().analyze(
+                    transcript_manifest,
+                    scene_manifest,
+                )
+            except StoryAnalysisError as exc:
+                parser.error(str(exc))
+
+            story_manifest.write(output_path)
+
+            if args.anime_id:
+                assert args.episode_number is not None
+                episode_id = f"{args.anime_id}-s{args.season}-e{args.episode_number}"
+                existing = {
+                    item.id: item
+                    for item in store.list_episodes(args.anime_id)
+                }.get(episode_id)
+                record = existing or EpisodeRecord(
+                    id=episode_id,
+                    anime_id=args.anime_id,
+                    episode_number=args.episode_number,
+                )
+                record.status = "PROCESSING"
+                record.current_checkpoint = "story"
+                record.failure_reason = None
+                record.provider = "local"
+                record.source_reference = str(
+                    args.input_path.expanduser().resolve()
+                )
+                record.analysis_manifest = str(analysis_path)
+                record.scene_manifest = str(scene_path)
+                record.transcript_manifest = str(transcript_path)
+                record.story_manifest = str(output_path)
+                store.save_episode(record)
+
+            _print_json(
+                story_manifest.to_dict()
+                | {
+                    "analysis_manifest_path": str(analysis_path),
+                    "scene_manifest_path": str(scene_path),
+                    "transcript_manifest_path": str(transcript_path),
+                    "story_manifest_path": str(output_path),
                 }
             )
             return
