@@ -170,3 +170,45 @@ provider_fallbacks:
 
     assert [item.name for item in config.provider_fallbacks] == ["anivexa", "anivault"]
     assert config.provider_fallbacks[0].api_base_url == "https://anivexa.example"
+
+
+
+def test_config_includes_gemini_thinking_level(tmp_path: Path) -> None:
+    path = tmp_path / "config.yml"
+    path.write_text(
+        """
+project:
+  name: AniMeXe
+llm:
+  thinking_level: low
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path)
+
+    assert config.llm.thinking_level == "low"
+
+
+def test_config_accepts_gemini_tts(tmp_path: Path) -> None:
+    path = tmp_path / "config.yml"
+    path.write_text(
+        """
+project:
+  name: AniMeXe
+tts:
+  provider: gemini
+  model: gemini-3.8-flash-tts
+  api_key_env: TEST_GEMINI_KEY
+  voice: Kore
+  style: natural narrator
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path)
+
+    assert config.tts.provider == "gemini"
+    assert config.tts.model == "gemini-3.8-flash-tts"
+    assert config.tts.api_key_env == "TEST_GEMINI_KEY"
+    assert config.tts.voice == "Kore"
