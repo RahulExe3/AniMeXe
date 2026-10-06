@@ -102,3 +102,65 @@ The next implementation step is scene indexing:
 4. make the scene checkpoint resumable.
 
 Transcript extraction can then consume the same scene/analysis workspace.
+
+## Current scene-indexing checkpoint
+
+The second analysis checkpoint is now implemented:
+
+```text
+input → inspected → scenes
+```
+
+Scene indexing uses PySceneDetect 0.7.x with ContentDetector. The detector identifies shot changes, then AniMeXe normalizes each scene into a stable SceneRecord.
+
+For every scene AniMeXe records:
+
+- stable scene ID and index
+- start/end timestamps
+- duration
+- representative timestamp
+- relative representative-frame path
+
+Representative frames are extracted through FFmpeg and downscaled to the configured width (640 pixels by default). This keeps the visual index compact enough for later AI analysis while leaving the original episode untouched.
+
+The scene manifest also carries the source SHA-256 from the inspection manifest. Before indexing, AniMeXe verifies that the current input still matches that fingerprint. This prevents stale manifests from being silently reused after an input file changes.
+
+If the detector reports no cuts but the inspection manifest has a valid duration, the episode is represented as one scene spanning the full duration. This gives later stages a usable baseline rather than an empty visual index.
+
+## Scene CLI
+
+The current command is:
+
+```bash
+python -m animexe episode scenes /path/to/episode.mkv
+```
+
+When the inspection manifest is missing, the command creates it first. Otherwise it consumes the existing manifest.
+
+Attach the scene checkpoint to persistent episode state:
+
+```bash
+python -m animexe episode scenes /path/to/episode.mkv \
+  --anime-id mal:12345 \
+  --episode-number 4 \
+  --season 1
+```
+
+Disable frame extraction when only timestamp analysis is required:
+
+```bash
+python -m animexe episode scenes /path/to/episode.mkv --no-frames
+```
+
+By default, scene output is placed under:
+
+```text
+workspace/analysis/<input-name>/
+├── scenes.json
+└── frames/
+    ├── scene_0001.jpg
+    ├── scene_0002.jpg
+    └── ...
+```
+
+The next checkpoint is transcript extraction. Transcript data will be aligned to these scene timestamps so story understanding can use both spoken content and visual context.
