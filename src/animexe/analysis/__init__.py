@@ -9,7 +9,7 @@ from .transcript import (
     TranscriptError,
     TranscriptSegment,
 )
-from .story import (
+from .gemini_story import GeminiStoryAnalyzer, GeminiStoryError\nfrom .story import (
     EpisodeStoryManifest,
     ExtractiveStoryAnalyzer,
     StoryAnalysisError,
