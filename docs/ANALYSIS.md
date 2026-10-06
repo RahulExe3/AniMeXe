@@ -164,3 +164,54 @@ workspace/analysis/<input-name>/
 ```
 
 The next checkpoint is transcript extraction. Transcript data will be aligned to these scene timestamps so story understanding can use both spoken content and visual context.
+
+## Current transcript checkpoint
+
+The third analysis checkpoint is now implemented for episodes that contain an embedded text subtitle stream.
+
+Flow:
+
+```text
+input → inspected → scenes → transcript
+```
+
+AniMeXe:
+
+1. verifies that the input path matches both prior manifests;
+2. verifies the current input SHA-256 against the inspection manifest;
+3. chooses the preferred embedded subtitle stream (English is preferred by default, followed by Hindi, then the first available text subtitle);
+4. asks FFmpeg to convert that stream to SRT;
+5. parses timed captions into normalized transcript segments;
+6. attaches each caption to every scene whose interval overlaps the caption;
+7. writes a versioned transcript manifest.
+
+The extracted source subtitle file is kept beside the manifest as a worker artifact and can be discarded after downstream checkpoints have consumed it.
+
+CLI:
+
+```bash
+python -m animexe episode transcript /path/to/episode.mkv
+```
+
+Attach the transcript checkpoint to an episode record:
+
+```bash
+python -m animexe episode transcript /path/to/episode.mkv \
+  --anime-id mal:12345 \
+  --episode-number 4 \
+  --season 1
+```
+
+Default output:
+
+```text
+workspace/analysis/<input-name>/
+├── source.srt
+├── scenes.json
+├── transcript.json
+└── frames/
+```
+
+Episodes without an embedded text subtitle track fail this checkpoint with an explicit message rather than silently creating an empty transcript. The transcript layer is intentionally separated from ASR so a future local ASR adapter (for example, a Whisper-family backend) can be added without changing the story engine or state contract.
+
+The next checkpoint is story understanding: combining episode metadata, scene frames, and transcript segments into a structured episode representation.
