@@ -54,6 +54,16 @@ class EpisodeConfig:
 
 
 @dataclass(frozen=True)
+class LLMConfig:
+    provider: str = "gemini"
+    model: str = "gemini-3.8-flash"
+    api_key_env: str = "GEMINI_API_KEY"
+    temperature: float = 0.2
+    max_output_tokens: int = 12000
+    max_frames: int = 32
+
+
+@dataclass(frozen=True)
 class NarrationConfig:
     style: str = "conversational"
     language: str = "hinglish"
@@ -94,6 +104,7 @@ class AppConfig:
     metadata: MetadataConfig = MetadataConfig()
     scheduler: SchedulerConfig = SchedulerConfig()
     episode: EpisodeConfig = EpisodeConfig()
+    llm: LLMConfig = LLMConfig()
     narration: NarrationConfig = NarrationConfig()
     video: VideoConfig = VideoConfig()
     audio: AudioConfig = AudioConfig()
@@ -110,7 +121,7 @@ def _optional_string(value: Any) -> str | None:
     if value is None:
         return None
     value = str(value).strip()
-    if not value or (value.startswith("${") and value.endswith("}")):
+    if not value or (value.startswith(") and value.endswith(")):
         return None
     return value
 
@@ -125,6 +136,7 @@ def load_config(path: Path) -> AppConfig:
     metadata = _section(expanded, "metadata")
     scheduler = _section(expanded, "scheduler")
     episode = _section(expanded, "episode")
+    llm = _section(expanded, "llm")
     narration = _section(expanded, "narration")
     video = _section(expanded, "video")
     audio = _section(expanded, "audio")
@@ -157,6 +169,14 @@ def load_config(path: Path) -> AppConfig:
             scene_min_duration=float(episode.get("scene_min_duration", 0.5)),
             scene_frame_width=int(episode.get("scene_frame_width", 640)),
             transcript=str(episode.get("transcript", "auto")),
+        ),
+        llm=LLMConfig(
+            provider=str(llm.get("provider", "gemini")),
+            model=str(llm.get("model", "gemini-3.8-flash")),
+            api_key_env=str(llm.get("api_key_env", "GEMINI_API_KEY")),
+            temperature=float(llm.get("temperature", 0.2)),
+            max_output_tokens=int(llm.get("max_output_tokens", 12000)),
+            max_frames=int(llm.get("max_frames", 32)),
         ),
         narration=NarrationConfig(
             style=str(narration.get("style", "conversational")),
@@ -199,5 +219,17 @@ def load_config(path: Path) -> AppConfig:
         raise ValueError("episode.scene_min_duration must be positive")
     if config.episode.scene_frame_width <= 0:
         raise ValueError("episode.scene_frame_width must be positive")
+    if not config.llm.provider.strip():
+        raise ValueError("llm.provider cannot be empty")
+    if not config.llm.model.strip():
+        raise ValueError("llm.model cannot be empty")
+    if not config.llm.api_key_env.strip():
+        raise ValueError("llm.api_key_env cannot be empty")
+    if config.llm.temperature < 0:
+        raise ValueError("llm.temperature cannot be negative")
+    if config.llm.max_output_tokens < 1:
+        raise ValueError("llm.max_output_tokens must be positive")
+    if config.llm.max_frames < 0:
+        raise ValueError("llm.max_frames cannot be negative")
 
     return config
