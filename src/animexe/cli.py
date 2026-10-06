@@ -133,6 +133,11 @@ def _build_parser() -> argparse.ArgumentParser:
     episode_transcript.add_argument("--episode-number", type=int)
     episode_transcript.add_argument("--season", type=int, default=1)
     episode_transcript.add_argument("--output", type=Path)
+    episode_transcript.add_argument(
+        "--allow-missing-subtitles",
+        action="store_true",
+        help="continue with a READY empty transcript so visual-only story analysis can proceed",
+    )
 
     episode_story = episode_sub.add_parser(
         "story",
@@ -549,7 +554,9 @@ def main() -> None:
             )
             transcript_manifest_path = args.output or (output_dir / "transcript.json")
 
-            extractor = SubtitleTranscriptExtractor()
+            extractor = SubtitleTranscriptExtractor(
+                allow_missing_subtitles=args.allow_missing_subtitles,
+            )
             try:
                 transcript_manifest = extractor.extract(
                     args.input_path,
