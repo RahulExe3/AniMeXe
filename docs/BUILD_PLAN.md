@@ -146,28 +146,31 @@ The implemented script checkpoint consumes the semantic story representation and
 The script manifest is persisted as the `script` checkpoint.
 
 ### Phase 9 — Narration TTS
-Build a replaceable TTS interface with:
-- free/local-first implementation;
-- English and Hinglish voice selection;
-- sentence-level generation from the script manifest;
-- measured duration per narration segment;
-- punctuation-aware pacing;
-- retries/fallbacks;
-- clean audio manifests.
 
-Measured TTS timing becomes authoritative; script-stage timing anchors are retained only as planning metadata.
+The TTS checkpoint is now implemented with a provider-neutral interface.
+
+Current backends:
+- **Synthetic:** deterministic real WAV output for end-to-end pipeline tests.
+- **Command:** external/local TTS bridge with measured audio validation.
+
+The checkpoint generates audio for the hook, every narration segment, and the ending. It records measured duration, sample rate, channels, scene IDs, provider, and voice.
+
+Measured TTS timing is authoritative; script-stage timing anchors are retained only as planning metadata.
 
 ### Phase 10 — Intelligent editing
-Match narration segments to scenes using:
-- chronology;
-- transcript overlap;
-- entities;
-- scene importance;
-- visual similarity where available;
-- duration fit;
-- repetition penalties.
 
-Generate a declarative timeline. The renderer should consume the timeline rather than contain story logic.
+The initial scene-matching checkpoint is now implemented.
+
+The matcher consumes:
+- scene timestamps and representative positions;
+- script-linked scene candidates;
+- measured TTS segment durations;
+- maximum clip duration;
+- scene reuse policy.
+
+It produces a declarative matching manifest with source-scene intervals and narration-audio references. The renderer must consume this map rather than contain story logic.
+
+Future scoring can add visual embeddings, entity recognition, transcript overlap, and richer repetition penalties without changing the manifest boundary.
 
 ### Phase 11 — Audio, subtitles, and rendering
 Build:
