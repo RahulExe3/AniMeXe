@@ -177,23 +177,20 @@ class GeminiStoryAnalyzer:
         *,
         scene_manifest_dir: Path | None,
     ) -> tuple[str, str]:
-        import base64
-        import time
-        import requests
-
-        api_key = os.environ.get(self.api_key_env, "").strip()
+        """Generate story JSON using the same direct REST pattern as YTAutoPilot."""
+        api_key = os.getenv(self.api_key_env, "").strip()
         if not api_key:
             raise GeminiStoryError(
                 f"Gemini API key is missing; set {self.api_key_env} in the environment"
             )
 
-        candidates: list[str] = []
-        configured = os.environ.get("GEMINI_MODEL", "").strip()
-        fallback_env = os.environ.get("GEMINI_FALLBACK_MODELS", "").strip()
-        for candidate in [self.model, configured, *fallback_env.split(",")]:
+        configured_model = (os.getenv("GEMINI_MODEL") or self.model).strip()
+        fallback_env = os.getenv("GEMINI_FALLBACK_MODELS", "").strip()
+        model_candidates: list[str] = []
+        for candidate in (configured_model, self.model, *fallback_env.split(",")):
             candidate = candidate.strip()
-            if candidate and candidate not in candidates:
-                candidates.append(candidate)
+            if candidate and candidate not in model_candidates:
+                model_candidates.append(candidate)
 
         parts: list[dict[str, Any]] = [{"text": prompt}]
         if scene_manifest_dir and self.max_frames:
@@ -210,99 +207,98 @@ class GeminiStoryAnalyzer:
                     data = frame_path.read_bytes()
                 except OSError:
                     continue
-                parts.append({
-                    "inlineData": {
-                        "mimeType": "image/jpeg",
-                        "data": base64.b64encode(data).decode("ascii"),
+                parts.append(
+                    {
+                        "inlineData": {
+                            "mimeType": "image/jpeg",
+                            "data": base64.b64encode(data).decode("ascii"),
+                        }
                     }
-                })
-                parts.append({
-                    "text": (
-                        f"Visual reference for scene {scene.scene_id} at "
-                        f"{scene.representative_time_seconds:.3f}s."
-                    )
-                })
+                )
+                parts.append(
+                    {
+                        "text": (
+                            f"Visual reference for scene {scene.scene_id} at "
+                            f"{scene.representative_time_seconds:.3f}s."
+                        )
+                    }
+                )
                 added += 1
 
-        generation_config: dict[str, Any] = {
-            "maxOutputTokens": self.max_output_tokens,
-            "responseMimeType": "application/json",
-            "responseSchema": self._rest_schema(STORY_RESPONSE_SCHEMA),
-        }
-
-        last_error = "unknown error"
-        for candidate_model in candidates:
-            if candidate_model.startswith("gemini-3"):
-                generation_config["thinkingConfig"] = {
-                    "thinkingLevel": self.thinking_level
-                }
-                generation_config.pop("temperature", None)
-            else:
-                generation_config.pop("thinkingConfig", None)
-                generation_config["temperature"] = self.temperature
-
+        errors: list[str] = []
+        for candidate_model in model_candidates:
             url = (
                 "https://generativelanguage.googleapis.com/v1beta/models/"
                 f"{candidate_model}:generateContent"
             )
+
             for attempt in range(3):
                 try:
+                    generation_config: dict[str, Any] = {
+                        "maxOutputTokens": self.max_output_tokens,
+                        "responseMimeType": "application/json",
+                    }
+                    candidate_lower = candidate_model.lower()
+                    if candidate_lower.startswith("gemini-3"):
+                        generation_config["thinkingConfig"] = {
+                            "thinkingLevel": self.thinking_level
+                        }
+                    else:
+                        generation_config["temperature"] = self.temperature
+
                     response = requests.post(
                         url,
-                        headers={
-                            "x-goog-api-key": api_key,
-                            "Content-Type": "application/json",
-                        },
+                        params={"key": api_key},
                         json={
                             "contents": [{"parts": parts}],
                             "generationConfig": generation_config,
                         },
-                        timeout=90,
+                        timeout=60,
                     )
+
                     if response.status_code in {429, 500, 502, 503, 504}:
-                        last_error = f"HTTP {response.status_code}"
+                        errors.append(
+                            f"{candidate_model} attempt {attempt + 1}: "
+                            f"HTTP {response.status_code}"
+                        )
                         if attempt < 2:
                             time.sleep(2 ** attempt)
                             continue
                         break
+
                     response.raise_for_status()
                     payload = response.json()
-                    text = payload["candidates"][0]["content"]["parts"][0]["text"]
-                    if isinstance(text, str) and text.strip():
-                        return text, candidate_model
-                    last_error = f"empty response from {candidate_model}"
-                except (requests.RequestException, KeyError, IndexError, TypeError, ValueError) as exc:
-                    last_error = str(exc)
+                    try:
+                        text = payload["candidates"][0]["content"]["parts"][0]["text"]
+                        if isinstance(text, str) and text.strip():
+                            return text, candidate_model
+                    except (KeyError, IndexError, TypeError) as exc:
+                        raise GeminiStoryError(
+                            "Gemini returned an unexpected response; inspect the API response and retry."
+                        ) from exc
+
+                    errors.append(
+                        f"{candidate_model} attempt {attempt + 1}: empty response"
+                    )
+                except requests.RequestException as exc:
+                    detail = str(exc)
                     if isinstance(exc, requests.HTTPError) and exc.response is not None:
-                        last_error = (
+                        detail = (
                             f"HTTP {exc.response.status_code}: "
                             f"{exc.response.text[:1000]}"
                         )
+                    errors.append(
+                        f"{candidate_model} attempt {attempt + 1}: {detail}"
+                    )
                     if attempt < 2:
                         time.sleep(2 ** attempt)
                         continue
                     break
 
         raise GeminiStoryError(
-            "Gemini REST generation failed after retries: " + last_error
+            "Gemini REST generation failed after retries. "
+            + " | ".join(errors[-8:])
         )
-
-    @staticmethod
-    def _rest_schema(schema: dict[str, Any]) -> dict[str, Any]:
-        def convert(value: Any) -> Any:
-            if isinstance(value, dict):
-                return {
-                    key: (
-                        value.upper()
-                        if key == "type" and isinstance(value, str)
-                        else convert(value)
-                    )
-                    for key, value in value.items()
-                }
-            if isinstance(value, list):
-                return [convert(item) for item in value]
-            return value
-        return convert(schema)
 
     def _generation_config(self) -> Any:
         try:
