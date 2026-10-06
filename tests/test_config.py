@@ -39,3 +39,24 @@ provider:
     config = load_config(path)
 
     assert config.provider.api_base_url is None
+
+
+def test_config_includes_scene_analysis_defaults(tmp_path: Path) -> None:
+    path = tmp_path / "config.yml"
+    path.write_text(
+        """
+project:
+  name: AniMeXe
+episode:
+  scene_threshold: 31.5
+  scene_min_duration: 0.75
+  scene_frame_width: 480
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path)
+
+    assert config.episode.scene_threshold == 31.5
+    assert config.episode.scene_min_duration == 0.75
+    assert config.episode.scene_frame_width == 480
