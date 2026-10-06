@@ -19,6 +19,15 @@ scheduler:
   count_mode: successful_outputs
   strategy: balanced
 
+llm:
+  # Semantic story-understanding backend.
+  provider: gemini
+  model: gemini-3.8-flash
+  api_key_env: GEMINI_API_KEY
+  temperature: 0.2
+  max_output_tokens: 12000
+  max_frames: 32
+
 episode:
   input_mode: local_or_provider
   scene_detection: true
