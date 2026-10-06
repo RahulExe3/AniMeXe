@@ -67,6 +67,11 @@ class LLMConfig:
 class NarrationConfig:
     style: str = "conversational"
     language: str = "hinglish"
+    script: str = "roman"
+    target_duration_seconds: float = 120.0
+    min_duration_seconds: float = 105.0
+    max_duration_seconds: float = 135.0
+    words_per_minute: int = 145
     speed: float = 1.0
 
 
@@ -180,7 +185,12 @@ def load_config(path: Path) -> AppConfig:
         ),
         narration=NarrationConfig(
             style=str(narration.get("style", "conversational")),
-            language=str(narration.get("language", "hinglish")),
+            language=str(narration.get("language", "hinglish")).lower(),
+            script=str(narration.get("script", "roman")).lower(),
+            target_duration_seconds=float(narration.get("target_duration_seconds", 120.0)),
+            min_duration_seconds=float(narration.get("min_duration_seconds", 105.0)),
+            max_duration_seconds=float(narration.get("max_duration_seconds", 135.0)),
+            words_per_minute=int(narration.get("words_per_minute", 145)),
             speed=float(narration.get("speed", 1.0)),
         ),
         video=VideoConfig(
@@ -211,6 +221,26 @@ def load_config(path: Path) -> AppConfig:
         raise ValueError("scheduler.daily_output_limit must be at least 1")
     if config.video.width <= 0 or config.video.height <= 0 or config.video.fps <= 0:
         raise ValueError("video dimensions and fps must be positive")
+    if config.narration.language not in {"english", "hinglish"}:
+        raise ValueError("narration.language must be english or hinglish")
+    if config.narration.script not in {"latin", "roman"}:
+        raise ValueError("narration.script must be latin or roman")
+    if config.narration.language == "english" and config.narration.script != "latin":
+        raise ValueError("English narration must use narration.script=latin")
+    if config.narration.language == "hinglish" and config.narration.script != "roman":
+        raise ValueError("Hinglish narration must use narration.script=roman")
+    if config.narration.target_duration_seconds <= 0:
+        raise ValueError("narration.target_duration_seconds must be positive")
+    if config.narration.min_duration_seconds <= 0:
+        raise ValueError("narration.min_duration_seconds must be positive")
+    if config.narration.max_duration_seconds <= 0:
+        raise ValueError("narration.max_duration_seconds must be positive")
+    if config.narration.min_duration_seconds > config.narration.max_duration_seconds:
+        raise ValueError("narration.min_duration_seconds cannot exceed max_duration_seconds")
+    if not config.narration.min_duration_seconds <= config.narration.target_duration_seconds <= config.narration.max_duration_seconds:
+        raise ValueError("narration.target_duration_seconds must be within the duration bounds")
+    if config.narration.words_per_minute < 60 or config.narration.words_per_minute > 220:
+        raise ValueError("narration.words_per_minute must be between 60 and 220")
     if config.narration.speed <= 0:
         raise ValueError("narration.speed must be positive")
     if config.episode.scene_threshold <= 0:
