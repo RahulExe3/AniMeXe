@@ -116,7 +116,7 @@ Local media must enter through the same normalized media boundary as external pr
 Current sub-checkpoints:
 - **inspected:** ffprobe technical manifest with input fingerprint and stream metadata.
 - **scenes:** PySceneDetect cut detection plus representative-frame extraction.
-- **next:** transcript/subtitle extraction aligned to the scene timeline.
+- **transcript:** embedded timed subtitle extraction aligned to the scene timeline; ASR remains a pluggable follow-up backend.
 
 Implement:
 - ffprobe technical inspection;
@@ -308,5 +308,6 @@ Completed in the current implementation slice:
 - persisted episode inspection checkpoints;
 - episode inspection tests.
 - PySceneDetect scene indexing with representative-frame extraction and fingerprint validation.
+- embedded subtitle transcript extraction with scene alignment and input fingerprint validation.
 
-Next implementation slice: **transcript extraction aligned to the scene index**.
+Next implementation slice: **story understanding from transcript + scene evidence**.
