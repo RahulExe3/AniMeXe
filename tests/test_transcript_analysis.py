@@ -108,7 +108,22 @@ def test_subtitle_extraction_requires_a_text_subtitle_stream(tmp_path: Path) -> 
     episode.write_bytes(b"fake media")
     manifest = _episode_manifest(episode)
     manifest = EpisodeAnalysisManifest(
-        **{**manifest.to_dict(), "streams": (), "subtitle_streams": 0}
+        schema_version=manifest.schema_version,
+        episode_id=manifest.episode_id,
+        input_path=manifest.input_path,
+        input_size_bytes=manifest.input_size_bytes,
+        input_sha256=manifest.input_sha256,
+        inspected_at=manifest.inspected_at,
+        ffprobe_version=manifest.ffprobe_version,
+        format_name=manifest.format_name,
+        format_long_name=manifest.format_long_name,
+        duration_seconds=manifest.duration_seconds,
+        start_time_seconds=manifest.start_time_seconds,
+        bit_rate=manifest.bit_rate,
+        streams=(),
+        video_streams=manifest.video_streams,
+        audio_streams=manifest.audio_streams,
+        subtitle_streams=0,
     )
 
     with pytest.raises(TranscriptError, match="no embedded text subtitle stream"):
