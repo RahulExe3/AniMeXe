@@ -27,7 +27,7 @@ def build_registry(config: AppConfig, project_root: Path) -> ProviderRegistry:
         elif name == "anivault":
             provider = AnivaultProvider(provider_config.api_base_url)
         else:
-            continue
+            raise ValueError(f"unsupported configured provider: {name}")
         registry.register(provider)
 
     return registry
