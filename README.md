@@ -5,7 +5,7 @@
 **Status:** Foundation implementation in progress  
 **Repository:** Private  
 **Brand:** AniMeXe  
-**Current focus:** Build the core automation first. The runnable foundation now includes metadata/provider boundaries plus the `inspected` and `scenes` episode-analysis checkpoints. YouTube publishing is intentionally out of scope for the initial implementation.
+**Current focus:** Build the core automation first. The runnable foundation now includes metadata/provider boundaries plus `inspected`, `scenes`, `transcript`, and deterministic `story` evidence checkpoints. YouTube publishing is intentionally out of scope for the initial implementation.
 
 ## 1. Vision
 
@@ -944,6 +944,14 @@ For the detailed blueprint, see docs/BUILD_PLAN.md, docs/PROVIDERS.md, docs/SCHE
 The first real milestone is a working multi-anime production engine that can register four anime, maintain independent episode progress, select two successful jobs per day, accept a supplied episode, analyze it, generate an original explanation and narration, match scenes, render a validated MP4, persist the result, resume failed work from checkpoints, and reproduce the process in GitHub Actions.
 
 YouTube publishing is not required for this milestone.
+
+### Story evidence checkpoint
+
+AniMeXe now assembles transcript-derived events, scene links, keywords, conservative character evidence, and an ending candidate into a persistent `story.json`. This first pass is deterministic/extractive; the next story layer will add a pluggable LLM backend for genuine semantic episode understanding.
+
+```bash
+python -m animexe episode story /path/to/episode.mkv
+```
 
 ### Transcript checkpoint
 
