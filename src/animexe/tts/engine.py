@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import math
 import re
@@ -194,6 +195,152 @@ class SyntheticTTSSynthesizer:
                 wav.writeframes(bytes(frames))
         except (OSError, wave.Error) as exc:
             raise TTSError(f"synthetic TTS could not write WAV: {exc}") from exc
+
+
+class GeminiTTSSynthesizer:
+    """Generate real narration with Gemini 3.8 Flash TTS."""
+
+    def __init__(
+        self,
+        *,
+        model: str = "gemini-3.8-flash-tts",
+        api_key_env: str = "GEMINI_API_KEY",
+        voice: str = "Kore",
+        style: str = (
+            "natural, conversational, expressive YouTube narrator; "
+            "clear sentence endings; natural pauses; believable Hinglish delivery"
+        ),
+    ) -> None:
+        if not model.strip():
+            raise ValueError("Gemini TTS model cannot be empty")
+        if not api_key_env.strip():
+            raise ValueError("Gemini TTS API key environment variable cannot be empty")
+        if not voice.strip():
+            raise ValueError("Gemini TTS voice cannot be empty")
+        if not style.strip():
+            raise ValueError("Gemini TTS style cannot be empty")
+        self.model = model
+        self.api_key_env = api_key_env
+        self.voice = voice
+        self.style = style
+        self._client = None
+
+    def synthesize(
+        self,
+        script: NarrationScriptManifest,
+        *,
+        output_dir: Path,
+        source_script: str = "script.json",
+    ) -> TTSManifest:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        client = self._client_or_create()
+
+        items: list[tuple[str, str, tuple[str, ...]]] = [
+            ("hook", script.hook, script.hook_scene_ids)
+        ]
+        items.extend(
+            (segment.segment_id, segment.text, segment.scene_ids)
+            for segment in script.segments
+        )
+        items.append(("ending", script.ending, script.ending_scene_ids))
+
+        rendered: list[TTSSegment] = []
+        for index, (segment_id, text_value, scene_ids) in enumerate(items, start=1):
+            audio_path = output_dir / f"{index:04d}_{_safe_name(segment_id)}.wav"
+            try:
+                response = client.models.generate_content(
+                    model=self.model,
+                    contents=[{
+                        "role": "user",
+                        "parts": [{
+                            "text": text_value,
+                            "speech_metadata": {"style": self.style},
+                        }],
+                    }],
+                    config={
+                        "response_modalities": ["AUDIO"],
+                        "speech_config": {
+                            "voice_config": {"voice": self.voice},
+                        },
+                    },
+                )
+            except Exception as exc:
+                raise TTSError(
+                    f"Gemini TTS request failed for {segment_id}: {exc}"
+                ) from exc
+
+            audio_data = _extract_gemini_audio(response)
+            if not audio_data:
+                raise TTSError(f"Gemini TTS returned no audio for {segment_id}")
+            try:
+                audio_path.write_bytes(audio_data)
+            except OSError as exc:
+                raise TTSError(f"could not write Gemini TTS audio {audio_path}: {exc}") from exc
+
+            duration, sample_rate, channels = _probe_audio(audio_path)
+            rendered.append(
+                TTSSegment(
+                    segment_id=segment_id,
+                    text=text_value,
+                    audio=audio_path.name,
+                    duration_seconds=duration,
+                    sample_rate=sample_rate,
+                    channels=channels,
+                    scene_ids=scene_ids,
+                )
+            )
+
+        total = sum(segment.duration_seconds for segment in rendered)
+        return TTSManifest(
+            schema_version=1,
+            episode_id=script.episode_id,
+            input_path=script.input_path,
+            input_sha256=script.input_sha256,
+            source_script=source_script,
+            provider="gemini",
+            language=script.language,
+            script=script.script,
+            segments=tuple(rendered),
+            total_duration_seconds=round(total, 3),
+            voice=self.voice,
+        )
+
+    def _client_or_create(self):
+        if self._client is not None:
+            return self._client
+        api_key = __import__("os").environ.get(self.api_key_env, "").strip()
+        if not api_key:
+            raise TTSError(
+                f"Gemini TTS API key is missing; set {self.api_key_env} in the environment"
+            )
+        try:
+            from google import genai
+        except ImportError as exc:
+            raise TTSError(
+                "google-genai is not installed; install the project dependencies first"
+            ) from exc
+        self._client = genai.Client(api_key=api_key)
+        return self._client
+
+
+def _extract_gemini_audio(response: object) -> bytes:
+    try:
+        candidates = getattr(response, "candidates", None) or []
+        for candidate in candidates:
+            content = getattr(candidate, "content", None)
+            for part in getattr(content, "parts", None) or []:
+                inline_data = getattr(part, "inline_data", None)
+                data = getattr(inline_data, "data", None) if inline_data else None
+                if isinstance(data, bytes):
+                    return data
+                if isinstance(data, str) and data.strip():
+                    try:
+                        return base64.b64decode(data)
+                    except (ValueError, base64.binascii.Error):
+                        continue
+    except Exception:
+        return b""
+    return b""
 
 
 class CommandTTSSynthesizer:
