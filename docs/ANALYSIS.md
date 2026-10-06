@@ -301,4 +301,6 @@ Configuration lives under `llm:` in the project config. The API key is read from
 
 The resulting `story.json` now carries the richer semantic fields needed by the next stage: episode summary, relationships, ending, narration points, confidence, and the Gemini model identifier.
 
-The next checkpoint is original narration-script generation from this semantic story representation.
+The next checkpoint, original narration-script generation, is now implemented.
+
+The story layer remains language-neutral. Language is selected only at the narration-script boundary so the same semantic analysis can produce either English or Hinglish without rerunning the expensive episode-understanding stage.
