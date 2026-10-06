@@ -24,6 +24,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Prepare Gemini cache directory
+        run: mkdir -p workspace/cache/gemini
+
       - name: Restore Gemini response cache
         uses: actions/cache/restore@v6
         with:
