@@ -210,12 +210,12 @@ class GeminiStoryAnalyzer:
             )
             last_error: Exception = first_error
             for _ in range(2):
-                repair_text, repair_model = self._rest_generate(
-                    repair_prompt,
-                    scenes,
-                    scene_manifest_dir=scene_manifest_dir,
-                )
                 try:
+                    repair_text, repair_model = self._rest_generate(
+                        repair_prompt,
+                        scenes,
+                        scene_manifest_dir=scene_manifest_dir,
+                    )
                     repaired = self._unwrap_story_payload(json.loads(repair_text))
                     manifest = self._manifest_from_payload(
                         repaired,
@@ -241,13 +241,14 @@ class GeminiStoryAnalyzer:
                     + str(last_error)
                 ) from last_error
 
-        self._save_cached_response(
-            prompt,
-            scenes=scenes,
-            model=used_model,
-            text=text,
-            scene_manifest_dir=scene_manifest_dir,
-        )
+        if self._client is None:
+            self._save_cached_response(
+                prompt,
+                scenes=scenes,
+                model=used_model,
+                text=text,
+                scene_manifest_dir=scene_manifest_dir,
+            )
         return manifest
 
     def _rest_generate(
@@ -452,6 +453,10 @@ class GeminiStoryAnalyzer:
             "model": model,
             "prompt": prompt,
             "input_sha256": scenes.input_sha256,
+            "max_frames": len(
+                [scene for scene in scenes.scenes if scene.representative_frame]
+            ) if scenes.scenes else 0,
+            "thinking_level": "configured",
         }
         return hashlib.sha256(
             json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
