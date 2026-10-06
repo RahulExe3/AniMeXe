@@ -209,6 +209,7 @@ jobs:
               "scenes",
               "transcript",
               "story",
+              "edit_plan",
               "script",
               "tts",
               "matching",
