@@ -22,6 +22,7 @@ class TTSSynthesizer(Protocol):
         script: NarrationScriptManifest,
         *,
         output_dir: Path,
+        source_script: str = "script.json",
     ) -> "TTSManifest": ...
 
 
@@ -33,6 +34,7 @@ class TTSSegment:
     duration_seconds: float
     sample_rate: int
     channels: int
+    scene_ids: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -42,6 +44,7 @@ class TTSSegment:
             "duration_seconds": self.duration_seconds,
             "sample_rate": self.sample_rate,
             "channels": self.channels,
+            "scene_ids": list(self.scene_ids),
         }
 
 
@@ -94,6 +97,7 @@ class TTSManifest:
                 duration_seconds=float(item["duration_seconds"]),
                 sample_rate=int(item["sample_rate"]),
                 channels=int(item["channels"]),
+                scene_ids=tuple(item.get("scene_ids", [])),
             )
             for item in payload.get("segments", [])
         )
@@ -101,7 +105,7 @@ class TTSManifest:
 
 
 class SyntheticTTSSynthesizer:
-    """Create deterministic real WAV audio for end-to-end pipeline testing."""
+    """Create deterministic real WAV audio for end-to-end pipeline tests."""
 
     def __init__(
         self,
@@ -121,44 +125,45 @@ class SyntheticTTSSynthesizer:
         script: NarrationScriptManifest,
         *,
         output_dir: Path,
+        source_script: str = "script.json",
     ) -> TTSManifest:
-        self._require_ffmpeg()
+        _require_media_tools()
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        items = [
-            (script.hook, script.segments[0].scene_ids if script.segments else script.hook_scene_ids, "hook")
+        items: list[tuple[str, str, tuple[str, ...]]] = [
+            ("hook", script.hook, script.hook_scene_ids)
         ]
         items.extend(
-            (segment.text, segment.scene_ids, segment.segment_id)
+            (segment.segment_id, segment.text, segment.scene_ids)
             for segment in script.segments
         )
-        items.append((script.ending, script.ending_scene_ids, "ending"))
+        items.append(("ending", script.ending, script.ending_scene_ids))
 
         rendered: list[TTSSegment] = []
-        total = 0.0
-        for index, (text, _, label) in enumerate(items, start=1):
-            duration = max(0.45, self._estimated_duration(text))
-            audio_path = output_dir / f"{index:04d}_{_safe_name(label)}.wav"
+        for index, (segment_id, text_value, scene_ids) in enumerate(items, start=1):
+            duration = max(0.45, self._estimated_duration(text_value))
+            audio_path = output_dir / f"{index:04d}_{_safe_name(segment_id)}.wav"
             self._render_tone(audio_path, duration)
             measured, sample_rate, channels = _probe_audio(audio_path)
             rendered.append(
                 TTSSegment(
-                    segment_id=label,
-                    text=text,
+                    segment_id=segment_id,
+                    text=text_value,
                     audio=audio_path.name,
                     duration_seconds=measured,
                     sample_rate=sample_rate,
                     channels=channels,
+                    scene_ids=scene_ids,
                 )
             )
-            total += measured
 
+        total = sum(segment.duration_seconds for segment in rendered)
         return TTSManifest(
             schema_version=1,
             episode_id=script.episode_id,
             input_path=script.input_path,
             input_sha256=script.input_sha256,
-            source_script=script.source_story.replace("story.json", "script.json"),
+            source_script=source_script,
             provider="synthetic",
             language=script.language,
             script=script.script,
@@ -172,7 +177,6 @@ class SyntheticTTSSynthesizer:
         return words / self.words_per_minute * 60.0
 
     def _render_tone(self, path: Path, duration: float) -> None:
-        frequency = 440
         command = [
             "ffmpeg",
             "-v",
@@ -180,7 +184,7 @@ class SyntheticTTSSynthesizer:
             "-f",
             "lavfi",
             "-i",
-            f"sine=frequency={frequency}:duration={duration}",
+            f"sine=frequency=440:duration={duration}",
             "-ac",
             "1",
             "-ar",
@@ -199,13 +203,9 @@ class SyntheticTTSSynthesizer:
         )
         if completed.returncode != 0:
             raise TTSError(
-                f"synthetic TTS ffmpeg failed: {completed.stderr.strip() or 'unknown error'}"
+                f"synthetic TTS ffmpeg failed: "
+                f"{completed.stderr.strip() or 'unknown error'}"
             )
-
-    @staticmethod
-    def _require_ffmpeg() -> None:
-        if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
-            raise TTSError("ffmpeg and ffprobe are required for TTS audio generation")
 
 
 class CommandTTSSynthesizer:
@@ -216,36 +216,44 @@ class CommandTTSSynthesizer:
         command: tuple[str, ...],
         *,
         voice: str | None = None,
-        sample_rate: int = 24000,
-        channels: int = 1,
     ) -> None:
         if not command:
             raise ValueError("TTS command cannot be empty")
         self.command = command
         self.voice = voice
-        self.sample_rate = sample_rate
-        self.channels = channels
 
     def synthesize(
         self,
         script: NarrationScriptManifest,
         *,
         output_dir: Path,
+        source_script: str = "script.json",
     ) -> TTSManifest:
+        _require_media_tools()
         output_dir.mkdir(parents=True, exist_ok=True)
-        rendered: list[TTSSegment] = []
 
-        for index, segment in enumerate(script.segments, start=1):
-            audio_path = output_dir / f"{index:04d}_{_safe_name(segment.segment_id)}.wav"
-            text_path = output_dir / f"{index:04d}_{_safe_name(segment.segment_id)}.txt"
-            text_path.write_text(segment.text, encoding="utf-8")
+        items: list[tuple[str, str, tuple[str, ...]]] = [
+            ("hook", script.hook, script.hook_scene_ids)
+        ]
+        items.extend(
+            (segment.segment_id, segment.text, segment.scene_ids)
+            for segment in script.segments
+        )
+        items.append(("ending", script.ending, script.ending_scene_ids))
+
+        rendered: list[TTSSegment] = []
+        for index, (segment_id, text_value, scene_ids) in enumerate(items, start=1):
+            safe_id = _safe_name(segment_id)
+            audio_path = output_dir / f"{index:04d}_{safe_id}.wav"
+            text_path = output_dir / f"{index:04d}_{safe_id}.txt"
+            text_path.write_text(text_value, encoding="utf-8")
             command = tuple(
                 value.format(
                     text_file=str(text_path),
                     output_file=str(audio_path),
                     language=script.language,
                     script=script.script,
-                    segment_id=segment.segment_id,
+                    segment_id=segment_id,
                     voice=self.voice or "",
                 )
                 for value in self.command
@@ -259,7 +267,7 @@ class CommandTTSSynthesizer:
             )
             if completed.returncode != 0:
                 raise TTSError(
-                    f"TTS command failed for {segment.segment_id}: "
+                    f"TTS command failed for {segment_id}: "
                     f"{completed.stderr.strip() or completed.stdout.strip() or 'unknown error'}"
                 )
             if not audio_path.exists():
@@ -270,12 +278,13 @@ class CommandTTSSynthesizer:
             duration, sample_rate, channels = _probe_audio(audio_path)
             rendered.append(
                 TTSSegment(
-                    segment_id=segment.segment_id,
-                    text=segment.text,
+                    segment_id=segment_id,
+                    text=text_value,
                     audio=audio_path.name,
                     duration_seconds=duration,
                     sample_rate=sample_rate,
                     channels=channels,
+                    scene_ids=scene_ids,
                 )
             )
 
@@ -285,7 +294,7 @@ class CommandTTSSynthesizer:
             episode_id=script.episode_id,
             input_path=script.input_path,
             input_sha256=script.input_sha256,
-            source_script=script.source_story,
+            source_script=source_script,
             provider="command",
             language=script.language,
             script=script.script,
@@ -293,6 +302,11 @@ class CommandTTSSynthesizer:
             total_duration_seconds=round(total, 3),
             voice=self.voice,
         )
+
+
+def _require_media_tools() -> None:
+    if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
+        raise TTSError("ffmpeg and ffprobe are required for TTS audio generation")
 
 
 def _probe_audio(path: Path) -> tuple[float, int, int]:
@@ -315,7 +329,8 @@ def _probe_audio(path: Path) -> tuple[float, int, int]:
     )
     if completed.returncode != 0:
         raise TTSError(
-            f"ffprobe failed for {path}: {completed.stderr.strip() or 'unknown error'}"
+            f"ffprobe failed for {path}: "
+            f"{completed.stderr.strip() or 'unknown error'}"
         )
     try:
         payload = json.loads(completed.stdout)
