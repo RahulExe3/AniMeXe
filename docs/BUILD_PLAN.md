@@ -130,27 +130,32 @@ Checkpoint chain:
 
 `input → inspected → scenes → transcript`
 
-### Phase 8 — Story engine
-Convert analysis into a structured episode representation containing:
-- events;
-- characters;
-- locations;
-- importance;
-- ending;
-- continuity notes;
-- candidate scenes.
+### Phase 8 — Story engine and narration script
 
-Generate and validate an original explanation script from that representation.
+The semantic story checkpoint is implemented with a deterministic extractive fallback plus an optional Gemini multimodal semantic pass.
 
-### Phase 9 — Narration
+The implemented script checkpoint consumes the semantic story representation and generates an original spoken explanation with:
+- English or Hinglish language mode;
+- Latin English or Roman Hinglish script;
+- strong hook and clear ending;
+- chronological body segments;
+- scene and story-event references;
+- approximately two-minute duration targets;
+- local validation against timing, word count, formatting artifacts, and obvious exact subtitle copying.
+
+The script manifest is persisted as the `script` checkpoint.
+
+### Phase 9 — Narration TTS
 Build a replaceable TTS interface with:
 - free/local-first implementation;
-- Hinglish-friendly pronunciation;
-- sentence-level generation;
-- duration measurement;
+- English and Hinglish voice selection;
+- sentence-level generation from the script manifest;
+- measured duration per narration segment;
 - punctuation-aware pacing;
 - retries/fallbacks;
 - clean audio manifests.
+
+Measured TTS timing becomes authoritative; script-stage timing anchors are retained only as planning metadata.
 
 ### Phase 10 — Intelligent editing
 Match narration segments to scenes using:
