@@ -484,14 +484,45 @@ def main() -> None:
                 / "story.json"
             )
 
+            config_path = paths.config / "config.yml"
+            if not config_path.exists():
+                config_path = paths.config / "config.example.yml"
+            app_config = load_config(config_path)
+
             try:
-                story_manifest = ExtractiveStoryAnalyzer().analyze(
-                    transcript_manifest,
-                    scene_manifest,
-                    source_transcript=str(transcript_path),
-                    source_scenes=str(scene_path),
-                )
-            except StoryAnalysisError as exc:
+                if args.mode == "gemini":
+                    if app_config.llm.provider.lower() != "gemini":
+                        parser.error(
+                            f"llm.provider is configured as {app_config.llm.provider!r}; "
+                            "set it to gemini before using --mode gemini"
+                        )
+                    story_manifest = GeminiStoryAnalyzer(
+                        model=app_config.llm.model,
+                        api_key_env=app_config.llm.api_key_env,
+                        temperature=app_config.llm.temperature,
+                        max_output_tokens=app_config.llm.max_output_tokens,
+                        max_frames=app_config.llm.max_frames,
+                    ).analyze(
+                        transcript_manifest,
+                        scene_manifest,
+                        scene_manifest_dir=scene_path.parent,
+                        source_transcript=str(transcript_path),
+                        source_scenes=str(scene_path),
+                    )
+                    story_manifest = EpisodeStoryManifest(
+                        **(
+                            story_manifest.to_dict()
+                            | {"model": app_config.llm.model}
+                        )
+                    )
+                else:
+                    story_manifest = ExtractiveStoryAnalyzer().analyze(
+                        transcript_manifest,
+                        scene_manifest,
+                        source_transcript=str(transcript_path),
+                        source_scenes=str(scene_path),
+                    )
+            except (StoryAnalysisError, GeminiStoryError) as exc:
                 parser.error(str(exc))
 
             story_manifest.write(output_path)
