@@ -7,10 +7,12 @@ from pathlib import Path
 from .analysis import (
     EpisodeAnalysisManifest,
     EpisodeInspector,
+    SceneAnalysisManifest,
     InspectionError,
     SceneDetectionError,
     SceneIndexer,
     SubtitleTranscriptExtractor,
+    TranscriptAnalysisManifest,
     TranscriptError,
     EpisodeStoryManifest,
     ExtractiveStoryAnalyzer,
@@ -486,6 +488,8 @@ def main() -> None:
                 story_manifest = ExtractiveStoryAnalyzer().analyze(
                     transcript_manifest,
                     scene_manifest,
+                    source_transcript=str(transcript_path),
+                    source_scenes=str(scene_path),
                 )
             except StoryAnalysisError as exc:
                 parser.error(str(exc))
