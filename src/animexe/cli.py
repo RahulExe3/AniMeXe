@@ -195,6 +195,35 @@ def _build_parser() -> argparse.ArgumentParser:
     episode_match.add_argument("--output", type=Path)
     episode_match.add_argument("--max-clip-duration", type=float, default=None)
 
+    episode_timeline = episode_sub.add_parser(
+        "timeline",
+        help="build the declarative render timeline",
+    )
+    episode_timeline.add_argument("input_path", type=Path)
+    episode_timeline.add_argument("--matching-manifest", type=Path)
+    episode_timeline.add_argument("--tts-manifest", type=Path)
+    episode_timeline.add_argument("--anime-id")
+    episode_timeline.add_argument("--episode-number", type=int)
+    episode_timeline.add_argument("--season", type=int, default=1)
+    episode_timeline.add_argument("--output", type=Path)
+
+    episode_render = episode_sub.add_parser(
+        "render",
+        help="render the final MP4 from the declarative timeline",
+    )
+    episode_render.add_argument("input_path", type=Path)
+    episode_render.add_argument("--timeline-manifest", type=Path)
+    episode_render.add_argument("--tts-dir", type=Path)
+    episode_render.add_argument("--anime-id")
+    episode_render.add_argument("--episode-number", type=int)
+    episode_render.add_argument("--season", type=int, default=1)
+    episode_render.add_argument("--output", type=Path)
+    episode_render.add_argument(
+        "--no-subtitles",
+        action="store_true",
+        help="do not burn narration subtitles into the video",
+    )
+
     sub.add_parser("plan", help="show the scheduler's next job plan")
 
     metadata = sub.add_parser("metadata", help="query normalized anime metadata")
@@ -932,6 +961,165 @@ def main() -> None:
                     "scene_manifest_path": str(scene_path),
                     "tts_manifest_path": str(tts_path),
                     "matching_manifest_path": str(output_path),
+                }
+            )
+            return
+
+    if args.command == "episode":
+        if args.episode_command == "timeline":
+            if (args.anime_id is None) != (args.episode_number is None):
+                parser.error("--anime-id and --episode-number must be supplied together")
+            if args.season < 1:
+                parser.error("--season must be >= 1")
+            if args.episode_number is not None and args.episode_number < 1:
+                parser.error("--episode-number must be >= 1")
+
+            matching_path = args.matching_manifest or (
+                paths.workspace
+                / "narration"
+                / args.input_path.stem
+                / "matching.json"
+            )
+            tts_path = args.tts_manifest or (
+                paths.workspace
+                / "narration"
+                / args.input_path.stem
+                / "tts.json"
+            )
+            output_path = args.output or (
+                paths.workspace
+                / "narration"
+                / args.input_path.stem
+                / "timeline.json"
+            )
+            try:
+                matching_manifest = SceneMatchManifest.read(matching_path)
+                tts_manifest = TTSManifest.read(tts_path)
+                timeline_manifest = TimelineBuilder().build(
+                    matching_manifest,
+                    tts_manifest,
+                    source_matching=str(matching_path),
+                    source_tts=str(tts_path),
+                )
+            except (OSError, ValueError, TypeError, KeyError, RenderError) as exc:
+                parser.error(f"could not build render timeline: {exc}")
+
+            timeline_manifest.write(output_path)
+
+            if args.anime_id:
+                assert args.episode_number is not None
+                episode_id = f"{args.anime_id}-s{args.season}-e{args.episode_number}"
+                existing = {
+                    item.id: item
+                    for item in store.list_episodes(args.anime_id)
+                }.get(episode_id)
+                record = existing or EpisodeRecord(
+                    id=episode_id,
+                    anime_id=args.anime_id,
+                    episode_number=args.episode_number,
+                )
+                record.status = "PROCESSING"
+                record.current_checkpoint = "timeline"
+                record.failure_reason = None
+                record.provider = "local"
+                record.source_reference = str(
+                    args.input_path.expanduser().resolve()
+                )
+                record.matching_manifest = str(matching_path)
+                record.tts_manifest = str(tts_path)
+                record.timeline_manifest = str(output_path)
+                store.save_episode(record)
+
+            _print_json(
+                timeline_manifest.to_dict()
+                | {
+                    "matching_manifest_path": str(matching_path),
+                    "tts_manifest_path": str(tts_path),
+                    "timeline_manifest_path": str(output_path),
+                }
+            )
+            return
+
+        if args.episode_command == "render":
+            if (args.anime_id is None) != (args.episode_number is None):
+                parser.error("--anime-id and --episode-number must be supplied together")
+            if args.season < 1:
+                parser.error("--season must be >= 1")
+            if args.episode_number is not None and args.episode_number < 1:
+                parser.error("--episode-number must be >= 1")
+
+            timeline_path = args.timeline_manifest or (
+                paths.workspace
+                / "narration"
+                / args.input_path.stem
+                / "timeline.json"
+            )
+            timeline_dir = args.tts_dir or (
+                paths.workspace
+                / "narration"
+                / args.input_path.stem
+                / "audio"
+            )
+            output_path = args.output or (
+                paths.workspace
+                / "output"
+                / f"{args.input_path.stem}.mp4"
+            )
+
+            try:
+                timeline_manifest = TimelineManifest.read(timeline_path)
+            except (OSError, ValueError, TypeError, KeyError) as exc:
+                parser.error(f"could not read timeline manifest: {exc}")
+
+            config_path = paths.config / "config.yml"
+            if not config_path.exists():
+                config_path = paths.config / "config.example.yml"
+            app_config = load_config(config_path)
+
+            try:
+                rendered = FFmpegRenderer(
+                    width=app_config.video.width,
+                    height=app_config.video.height,
+                    fps=app_config.video.fps,
+                ).render(
+                    timeline_manifest,
+                    source_video=args.input_path,
+                    narration_dir=timeline_dir,
+                    output_path=output_path,
+                    subtitles=app_config.subtitles.enabled
+                    and app_config.subtitles.burn_in
+                    and not args.no_subtitles,
+                )
+            except RenderError as exc:
+                parser.error(str(exc))
+
+            if args.anime_id:
+                assert args.episode_number is not None
+                episode_id = f"{args.anime_id}-s{args.season}-e{args.episode_number}"
+                existing = {
+                    item.id: item
+                    for item in store.list_episodes(args.anime_id)
+                }.get(episode_id)
+                record = existing or EpisodeRecord(
+                    id=episode_id,
+                    anime_id=args.anime_id,
+                    episode_number=args.episode_number,
+                )
+                record.status = "RENDERED"
+                record.current_checkpoint = "render"
+                record.failure_reason = None
+                record.provider = "local"
+                record.source_reference = str(
+                    args.input_path.expanduser().resolve()
+                )
+                record.timeline_manifest = str(timeline_path)
+                record.render_output = str(rendered)
+                store.save_episode(record)
+
+            _print_json(
+                {
+                    "render_output": str(rendered),
+                    "timeline_manifest_path": str(timeline_path),
                 }
             )
             return
