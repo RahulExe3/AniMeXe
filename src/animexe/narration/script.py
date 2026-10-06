@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from ..analysis.story import EpisodeStoryManifest
+from ..editing import EditPlanManifest
 from ..analysis.transcript import TranscriptAnalysisManifest
 
 
@@ -128,6 +129,7 @@ class NarrationScriptManifest:
     ending_scene_ids: tuple[str, ...]
     word_count: int
     estimated_duration_seconds: float
+    source_edit_plan: str | None = None
     checkpoint: str = "script"
     model: str | None = None
 
@@ -152,6 +154,7 @@ class NarrationScriptManifest:
             "ending_scene_ids": list(self.ending_scene_ids),
             "word_count": self.word_count,
             "estimated_duration_seconds": self.estimated_duration_seconds,
+            "source_edit_plan": self.source_edit_plan,
             "checkpoint": self.checkpoint,
             "model": self.model,
         }
@@ -236,6 +239,7 @@ class GeminiNarrationScriptGenerator:
         self,
         story: EpisodeStoryManifest,
         *,
+        edit_plan: EditPlanManifest | None = None,
         transcript: TranscriptAnalysisManifest | None = None,
         language: str = "hinglish",
         script: str = "roman",
@@ -261,8 +265,14 @@ class GeminiNarrationScriptGenerator:
                 "story manifest does not contain enough semantic information for narration"
             )
         self._validate_transcript_alignment(story, transcript)
+        if edit_plan is not None:
+            self._validate_edit_plan_alignment(story, edit_plan)
 
-        target_words = round(self.target_duration_seconds / 60.0 * self.words_per_minute)
+        target_words = round(
+            (edit_plan.total_duration_seconds if edit_plan is not None else self.target_duration_seconds)
+            / 60.0
+            * self.words_per_minute
+        )
         min_words = round(self.min_duration_seconds / 60.0 * self.words_per_minute)
         max_words = round(self.max_duration_seconds / 60.0 * self.words_per_minute)
         prompt = self._build_prompt(
@@ -273,6 +283,7 @@ class GeminiNarrationScriptGenerator:
             target_words=target_words,
             min_words=min_words,
             max_words=max_words,
+            edit_plan=edit_plan,
         )
 
         try:
@@ -314,11 +325,13 @@ class GeminiNarrationScriptGenerator:
         return self._manifest_from_payload(
             payload,
             story,
+            edit_plan=edit_plan,
             transcript=transcript,
             language=language,
             script=script,
             style=style,
             source_story=source_story,
+            source_edit_plan=(str(edit_plan.source_story) if edit_plan is not None else None),
             model=used_model,
         )
 
@@ -517,6 +530,23 @@ class GeminiNarrationScriptGenerator:
         return types.GenerateContentConfig(**kwargs)
 
     @staticmethod
+    def _validate_edit_plan_alignment(
+        story: EpisodeStoryManifest,
+        edit_plan: EditPlanManifest,
+    ) -> None:
+        if story.input_path != edit_plan.input_path:
+            raise NarrationScriptError(
+                "story and visual edit plan manifests reference different input files"
+            )
+        if story.input_sha256 and edit_plan.input_sha256:
+            if story.input_sha256 != edit_plan.input_sha256:
+                raise NarrationScriptError(
+                    "story and visual edit plan fingerprints do not match"
+                )
+        if not edit_plan.clips:
+            raise NarrationScriptError("visual edit plan contains no usable clips")
+
+    @staticmethod
     def _validate_transcript_alignment(
         story: EpisodeStoryManifest,
         transcript: TranscriptAnalysisManifest | None,
@@ -537,6 +567,7 @@ class GeminiNarrationScriptGenerator:
         self,
         story: EpisodeStoryManifest,
         *,
+        edit_plan: EditPlanManifest | None = None,
         language: str,
         script: str,
         style: str,
@@ -555,6 +586,20 @@ class GeminiNarrationScriptGenerator:
                 "kind": event.kind,
             }
             for event in story.events
+            if edit_plan is None or event.event_id in set(edit_plan.selected_event_ids)
+        ]
+        visual_cut_rows = [
+            {
+                "clip_id": clip.clip_id,
+                "event_id": clip.event_id,
+                "scene_id": clip.scene_id,
+                "start_seconds": clip.source_start_seconds,
+                "end_seconds": clip.source_end_seconds,
+                "duration_seconds": clip.duration_seconds,
+                "importance": clip.importance,
+                "reason": clip.reason,
+            }
+            for clip in (edit_plan.clips if edit_plan is not None else ())
         ]
         if language == "english":
             language_instruction = (
@@ -572,8 +617,10 @@ class GeminiNarrationScriptGenerator:
         return (
             "You are AniMeXe's original narration-script writer. "
             "Turn the supplied semantic episode story into an engaging spoken explanation. "
-            "The story manifest is the factual source of truth. "
-            "Preserve event order and only reference real scene IDs and story event IDs. "
+            "The story manifest is the factual source of truth, but the visual cut manifest is the "
+            "hard boundary for what the viewer will actually see. "
+            "Preserve event order and only reference scene IDs and story event IDs present in the visual cut. "
+            "Never narrate a story event that is outside the selected visual cut. "
             "Explain what happens rather than reading or paraphrasing subtitles line by line. "
             "Do not invent events, motives, relationships, characters, locations, or outcomes. "
             "Do not copy dialogue or subtitle sentences. Prefer original explanation and paraphrase. "
@@ -594,7 +641,8 @@ class GeminiNarrationScriptGenerator:
             f"RELATIONSHIPS:\n{json.dumps(list(story.relationships), ensure_ascii=False)}\n\n"
             f"NARRATION POINTS:\n{json.dumps(list(story.narration_points), ensure_ascii=False)}\n\n"
             f"ENDING:\n{story.ending}\n\n"
-            f"EVENTS:\n{json.dumps(event_rows, ensure_ascii=False)}"
+            f"EVENTS:\n{json.dumps(event_rows, ensure_ascii=False)}\n\n"
+            f"VISUAL CUT CLIPS:\n{json.dumps(visual_cut_rows, ensure_ascii=False)}"
         )
 
     def _manifest_from_payload(
@@ -602,11 +650,13 @@ class GeminiNarrationScriptGenerator:
         payload: Any,
         story: EpisodeStoryManifest,
         *,
+        edit_plan: EditPlanManifest | None,
         transcript: TranscriptAnalysisManifest | None,
         language: str,
         script: str,
         style: str,
         source_story: str,
+        source_edit_plan: str | None,
     ) -> NarrationScriptManifest:
         if not isinstance(payload, dict):
             raise NarrationScriptError("Gemini narration response must be a JSON object")
@@ -626,8 +676,16 @@ class GeminiNarrationScriptGenerator:
                 "Gemini narration response is missing fields: " + ", ".join(missing)
             )
 
-        valid_scene_ids = {scene_id for event in story.events for scene_id in event.scene_ids}
-        valid_event_ids = {event.event_id for event in story.events}
+        valid_scene_ids = (
+            set(edit_plan.scene_ids)
+            if edit_plan is not None
+            else {scene_id for event in story.events for scene_id in event.scene_ids}
+        )
+        valid_event_ids = (
+            set(edit_plan.selected_event_ids)
+            if edit_plan is not None
+            else {event.event_id for event in story.events}
+        )
         if not valid_scene_ids:
             raise NarrationScriptError("story manifest contains no usable scene IDs")
 
@@ -770,6 +828,7 @@ class GeminiNarrationScriptGenerator:
             ending_scene_ids=ending_scene_ids,
             word_count=actual_word_count,
             estimated_duration_seconds=round(estimated_duration, 3),
+            source_edit_plan=source_edit_plan,
             model=self.model,
         )
 
