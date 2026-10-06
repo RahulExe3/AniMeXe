@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -42,6 +44,7 @@ class SceneAnalysisManifest:
     schema_version: int
     episode_id: str | None
     input_path: str
+    input_sha256: str
     detection_method: str
     threshold: float
     min_scene_duration_seconds: float
@@ -55,6 +58,7 @@ class SceneAnalysisManifest:
             "schema_version": self.schema_version,
             "episode_id": self.episode_id,
             "input_path": self.input_path,
+            "input_sha256": self.input_sha256,
             "detection_method": self.detection_method,
             "threshold": self.threshold,
             "min_scene_duration_seconds": self.min_scene_duration_seconds,
@@ -65,8 +69,6 @@ class SceneAnalysisManifest:
         }
 
     def write(self, path: Path) -> None:
-        import json
-
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             json.dumps(self.to_dict(), indent=2, ensure_ascii=False) + "\n",
@@ -75,8 +77,6 @@ class SceneAnalysisManifest:
 
     @classmethod
     def read(cls, path: Path) -> "SceneAnalysisManifest":
-        import json
-
         payload = json.loads(path.read_text(encoding="utf-8"))
         scenes = tuple(SceneRecord(**item) for item in payload.get("scenes", []))
         payload["scenes"] = scenes
@@ -170,6 +170,7 @@ class SceneIndexer:
                 episode_manifest.episode_id if episode_manifest else None
             ),
             input_path=str(path),
+            input_sha256=episode_manifest.input_sha256 if episode_manifest else "",
             detection_method="pyscenedetect:ContentDetector",
             threshold=self.threshold,
             min_scene_duration_seconds=self.min_scene_duration_seconds,
@@ -209,12 +210,18 @@ class SceneIndexer:
         ]
         cleaned.sort(key=lambda item: item[0])
 
+        if duration and duration > 0:
+            cleaned = [
+                (min(start, duration), min(end, duration))
+                for start, end in cleaned
+                if min(end, duration) > min(start, duration)
+            ]
+
         if not cleaned and duration and duration > 0:
             return [(0.0, duration)]
 
         if cleaned and duration and duration > cleaned[-1][1]:
-            last_end = duration
-            cleaned[-1] = (cleaned[-1][0], last_end)
+            cleaned[-1] = (cleaned[-1][0], duration)
 
         return cleaned
 
@@ -273,7 +280,17 @@ class SceneIndexer:
             raise SceneDetectionError(
                 "episode analysis manifest belongs to a different input file"
             )
-        if manifest.duration_seconds is not None and manifest.duration_seconds <= 0:
+        if manifest.duration_seconds is None or manifest.duration_seconds <= 0:
             raise SceneDetectionError(
-                "episode analysis manifest has an invalid duration"
+                "episode analysis manifest is missing a valid duration"
             )
+
+        if manifest.input_sha256:
+            digest = hashlib.sha256()
+            with input_path.open("rb") as handle:
+                while chunk := handle.read(1024 * 1024):
+                    digest.update(chunk)
+            if digest.hexdigest() != manifest.input_sha256:
+                raise SceneDetectionError(
+                    "episode input fingerprint does not match the analysis manifest"
+                )
