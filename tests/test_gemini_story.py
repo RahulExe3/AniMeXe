@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -162,3 +163,59 @@ def test_gemini_story_uses_existing_frame_when_present(tmp_path: Path) -> None:
         scene_manifest_dir=tmp_path,
     )
     assert len(client.models.calls[0]["contents"]) == 3
+
+
+def test_gemini_story_unwraps_single_key_wrapper() -> None:
+    payload = {"story": _payload()}
+    assert GeminiStoryAnalyzer._unwrap_story_payload(payload) == _payload()
+
+
+def test_gemini_story_response_text_skips_thought_parts() -> None:
+    payload = {
+        "candidates": [{
+            "content": {
+                "parts": [
+                    {"text": "internal", "thought": True},
+                    {"text": "{\"episode_summary\":\"ok\"}"},
+                ]
+            }
+        }]
+    }
+    assert GeminiStoryAnalyzer._response_text(payload) == "{\"episode_summary\":\"ok\"}"
+
+
+def test_gemini_story_schema_uses_openapi_type_names() -> None:
+    schema = GeminiStoryAnalyzer._rest_schema({
+        "type": "object",
+        "properties": {
+            "events": {
+                "type": "array",
+                "items": {"type": "object"},
+            }
+        },
+    })
+    assert schema["type"] == "OBJECT"
+    assert schema["properties"]["events"]["type"] == "ARRAY"
+    assert schema["properties"]["events"]["items"]["type"] == "OBJECT"
+
+
+def test_gemini_story_cache_roundtrip(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ANIMEXE_GEMINI_CACHE_DIR", str(tmp_path))
+    analyzer = GeminiStoryAnalyzer()
+    transcript, scenes = _inputs()
+    analyzer._save_cached_response(
+        "prompt",
+        scenes=scenes,
+        model="gemini-3.8-flash",
+        text=json.dumps(_payload()),
+        scene_manifest_dir=tmp_path,
+    )
+    cached = analyzer._load_cached_response(
+        "prompt",
+        scenes=scenes,
+        model_candidates=["gemini-3.8-flash"],
+        scene_manifest_dir=tmp_path,
+    )
+    assert cached is not None
+    assert cached[0] == json.dumps(_payload())
+    assert cached[1] == "gemini-3.8-flash"
