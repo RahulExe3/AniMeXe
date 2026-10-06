@@ -369,6 +369,25 @@ python -m animexe provider check anilist:21 --episode-number 1 --language sub
 
 For hosted smoke testing, `.github/workflows/provider-smoke.yml` is manual-only. Set provider API endpoints as GitHub repository Variables. Stream extraction/proxy/decryption behavior from third-party aggregator projects is intentionally not embedded in AniMeXe; media enters processing through an authorized/local source boundary.
 
+## One-command production run
+
+The complete local-media pipeline is now available through one resumable command:
+
+```bash
+python -m animexe episode run /path/to/episode.mkv
+```
+
+With persistent episode identity:
+
+```bash
+python -m animexe episode run /path/to/episode.mkv \
+  --anime-id mal:12345 \
+  --episode-number 4 \
+  --season 1
+```
+
+The command runs inspection → scenes → transcript → Gemini story → Gemini narration script → configured TTS → matching → timeline → FFmpeg render. Existing checkpoints are fingerprint-checked and reused, and an existing MP4 is re-probed before it is trusted. BGM is automatically selected from the configured local music directory when enabled.
+
 ## 10. Episode analysis
 
 ### 10.1 Technical inspection
