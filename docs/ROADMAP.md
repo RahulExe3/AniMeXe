@@ -23,12 +23,19 @@
 - Measured narration timing.
 - Scene matching manifest with duration-aware scene selection.
 
-## Next — rendering
+## Now — rendering
 - Declarative timeline generation.
-- Clip extraction/rendering.
+- Scene interval rendering.
 - Source-audio mute.
-- Narration mix, BGM/SFX.
-- Subtitles and FFmpeg validation.
+- Measured narration mix.
+- SRT subtitles and optional burn-in.
+- FFmpeg output validation.
+
+## Next — polish
+- BGM ducking.
+- Optional SFX.
+- Richer transitions/crops.
+- Visual-similarity scoring improvements.
 
 ## Then — provider and automation
 - Anime discovery and release-status refresh.
