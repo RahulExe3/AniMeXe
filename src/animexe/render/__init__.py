@@ -9,9 +9,12 @@ from .timeline import (
     TimelineAudio,
 )
 from .ffmpeg import FFmpegRenderer
+from .visual_cut import VisualCutError, VisualCutRenderer
 
 __all__ = [
     "FFmpegRenderer",
+    "VisualCutError",
+    "VisualCutRenderer",
     "RenderError",
     "TimelineAudio",
     "TimelineBuilder",
