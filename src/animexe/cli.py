@@ -538,7 +538,6 @@ def main() -> None:
                 parser.error(f"could not read analysis manifest: {exc}")
 
             try:
-                from .analysis.scenes import SceneAnalysisManifest
                 scene_manifest = SceneAnalysisManifest.read(scene_manifest_path)
             except (OSError, ValueError, TypeError) as exc:
                 parser.error(f"could not read scene manifest: {exc}")
