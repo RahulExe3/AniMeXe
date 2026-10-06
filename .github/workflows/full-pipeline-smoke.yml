@@ -118,6 +118,9 @@ jobs:
 
           ffmpeg -hide_banner -loglevel error -y             -i workspace/e2e/video-only.mkv             -i workspace/e2e/transcript.srt             -map 0:v:0 -map 1:0             -c:v copy -c:s srt -metadata:s:s:0 language=eng             workspace/e2e/test-episode.mkv
 
+          mkdir -p assets/music
+          ffmpeg -hide_banner -loglevel error -y             -f lavfi -i "sine=frequency=220:sample_rate=24000:duration=8"             -c:a pcm_s16le assets/music/smoke-bgm.wav
+
           ffprobe -v error -show_entries format=duration             -of default=noprint_wrappers=1:nokey=1 workspace/e2e/test-episode.mkv
 
       - name: Inspect episode
