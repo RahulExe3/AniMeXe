@@ -37,9 +37,6 @@ jobs:
   visual-cut:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    env:
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -61,13 +58,6 @@ jobs:
 
       - name: Install project
         run: python -m pip install --upgrade pip && python -m pip install .
-
-      - name: Validate Gemini secret
-        run: |
-          test -n "$GEMINI_API_KEY" || {
-            echo "::error::GEMINI_API_KEY repository secret is missing."
-            exit 1
-          }
 
       - name: Create visual-cut configuration
         run: |
@@ -190,10 +180,6 @@ jobs:
         run: |
           python -m animexe episode transcript "$EPISODE" --allow-missing-subtitles
 
-      - name: Understand story
-        run: |
-          python -m animexe episode story "$EPISODE" --mode gemini
-
       - name: Build narration-free visual cut
         run: |
           TARGET_SECONDS="${{ inputs.target_duration_seconds }}"
@@ -202,7 +188,8 @@ jobs:
           fi
           python -m animexe episode visual-cut \
             "$EPISODE" \
-            --target-duration-seconds "$TARGET_SECONDS"
+            --target-duration-seconds "$TARGET_SECONDS" \
+            --visual-only
 
       - name: Validate video-only output
         run: |
