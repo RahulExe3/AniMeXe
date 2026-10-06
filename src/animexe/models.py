@@ -154,6 +154,7 @@ class MediaSource:
     intro: dict[str, float] | None = None
     outro: dict[str, float] | None = None
     capabilities: tuple[str, ...] = ()
+    headers: tuple[tuple[str, str], ...] = ()
 
     def validate(self) -> None:
         if not self.provider.strip():
