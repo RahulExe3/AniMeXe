@@ -15,6 +15,7 @@ from .analysis import (
     TranscriptAnalysisManifest,
 )
 from .config import AppConfig
+from .editing import EditPlanError, EditPlanManifest, EditPlanner
 from .matching import SceneMatchManifest, SceneMatcher
 from .narration import GeminiNarrationScriptGenerator, NarrationScriptManifest
 from .paths import ProjectPaths
@@ -208,6 +209,35 @@ class EpisodePipeline:
             story.write(story_path)
         checkpoints["story"] = str(story_path)
 
+        edit_plan_path = analysis_dir / "edit_plan.json"
+        if edit_plan_path.exists():
+            try:
+                edit_plan = EditPlanManifest.read(edit_plan_path)
+                if edit_plan.input_path != str(source):
+                    raise PipelineError("existing edit-plan checkpoint belongs to a different input")
+                if edit_plan.input_sha256 and edit_plan.input_sha256 != input_sha256:
+                    raise PipelineError("existing edit-plan checkpoint fingerprint does not match the current input")
+            except (OSError, ValueError, TypeError, KeyError) as exc:
+                raise PipelineError(f"invalid edit-plan checkpoint: {exc}") from exc
+            resumed.append("edit_plan")
+        else:
+            try:
+                edit_plan = EditPlanner(
+                    target_duration_seconds=self.config.narration.target_duration_seconds,
+                    min_duration_seconds=self.config.narration.min_duration_seconds,
+                    max_duration_seconds=self.config.narration.max_duration_seconds,
+                    max_clip_duration_seconds=self.config.video.max_clip_duration,
+                ).plan(
+                    story,
+                    scenes,
+                    source_story=str(story_path),
+                    source_scenes=str(scenes_path),
+                )
+            except EditPlanError as exc:
+                raise PipelineError(f"edit-plan generation failed: {exc}") from exc
+            edit_plan.write(edit_plan_path)
+        checkpoints["edit_plan"] = str(edit_plan_path)
+
         script_path = narration_dir / "script.json"
         if script_path.exists():
             try:
@@ -232,11 +262,13 @@ class EpisodePipeline:
                 words_per_minute=self.config.narration.words_per_minute,
             ).generate(
                 story,
+                edit_plan=edit_plan,
                 transcript=transcript,
                 language=self.config.narration.language,
                 script=self.config.narration.script,
                 style=self.config.narration.style,
                 source_story=str(story_path),
+                source_edit_plan=str(edit_plan_path),
             )
             script.write(script_path)
         checkpoints["script"] = str(script_path)
@@ -296,8 +328,10 @@ class EpisodePipeline:
             ).match(
                 scenes,
                 tts,
+                edit_plan=edit_plan,
                 source_scenes=str(scenes_path),
                 source_tts=str(tts_path),
+                source_edit_plan=str(edit_plan_path),
             )
             matching.write(matching_path)
         checkpoints["matching"] = str(matching_path)
