@@ -85,6 +85,9 @@ video:
 audio:
   mute_source: true
   bgm: true
+  music_dir: assets/music
+  bgm_volume: 0.12
+  bgm_ducking_ratio: 8.0
   sfx: optional
 
 subtitles:
