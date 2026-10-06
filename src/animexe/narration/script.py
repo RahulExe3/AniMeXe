@@ -188,6 +188,7 @@ class GeminiNarrationScriptGenerator:
         model: str = "gemini-3.8-flash",
         api_key_env: str = "GEMINI_API_KEY",
         temperature: float = 0.3,
+        thinking_level: str = "medium",
         max_output_tokens: int = 8000,
         target_duration_seconds: float = 120.0,
         min_duration_seconds: float = 105.0,
@@ -216,6 +217,7 @@ class GeminiNarrationScriptGenerator:
         self.model = model
         self.api_key_env = api_key_env
         self.temperature = temperature
+        self.thinking_level = thinking_level
         self.max_output_tokens = max_output_tokens
         self.target_duration_seconds = target_duration_seconds
         self.min_duration_seconds = min_duration_seconds
@@ -322,12 +324,18 @@ class GeminiNarrationScriptGenerator:
             raise NarrationScriptError(
                 "google-genai is not installed; install the project dependencies first"
             ) from exc
-        return types.GenerateContentConfig(
-            temperature=self.temperature,
-            max_output_tokens=self.max_output_tokens,
-            response_mime_type="application/json",
-            response_schema=SCRIPT_RESPONSE_SCHEMA,
-        )
+        kwargs = {
+            "max_output_tokens": self.max_output_tokens,
+            "response_mime_type": "application/json",
+            "response_schema": SCRIPT_RESPONSE_SCHEMA,
+        }
+        if self.model.startswith("gemini-3"):
+            kwargs["thinking_config"] = types.ThinkingConfig(
+                thinking_level=self.thinking_level
+            )
+        else:
+            kwargs["temperature"] = self.temperature
+        return types.GenerateContentConfig(**kwargs)
 
     @staticmethod
     def _validate_transcript_alignment(
