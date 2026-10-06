@@ -163,7 +163,7 @@ workspace/analysis/<input-name>/
     └── ...
 ```
 
-The next checkpoint is transcript extraction. Transcript data will be aligned to these scene timestamps so story understanding can use both spoken content and visual context.
+The transcript checkpoint follows scene indexing. Transcript data is aligned to these scene timestamps so story processing can use both spoken content and visual context.
 
 ## Current transcript checkpoint
 
