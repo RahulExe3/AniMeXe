@@ -911,6 +911,7 @@ The implementation now follows the practical execution pattern proven in YTAutoP
 8. FFprobe, scene detection, frame extraction, and transcript analysis.
 9. Story understanding and original explanation generation.
 10. Local/free TTS with sentence-level timing.
+11. Scene matching from measured narration timing.
 11. Narration-to-scene matching and declarative timeline generation.
 12. BGM/SFX, subtitles, source-audio mute, and FFmpeg rendering.
 13. Validation and machine-readable artifacts.
@@ -975,7 +976,7 @@ An episode can resume from its last successful stage instead of restarting from 
 
 Example:
 
-input ✓ → metadata ✓ → scenes ✓ → transcript ✓ → story ✓ → script ✓ → TTS ✗ → matching pending → render pending
+input ✓ → metadata ✓ → scenes ✓ → transcript ✓ → story ✓ → script ✓ → TTS ✓ → matching ✓ → render pending
 
 This is required both locally and in GitHub Actions.
 
