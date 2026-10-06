@@ -47,22 +47,27 @@ class AnivexaProvider(Provider):
 
     @classmethod
     def _episode_items(cls, response: dict[str, Any]) -> list[EpisodeRef]:
-        """Normalize Anivexa's /episodes/:anilistId response.
-
-        The API returns one top-level object per provider, each containing:
-        { episodes: { sub: [...], dub: [...] } }.
-        """
+        """Normalize both current and provider-filtered /episodes responses."""
         anilist_id = cls._response_anilist_id(response)
         found: list[EpisodeRef] = []
         seen: set[tuple[int, str, str]] = set()
 
-        for provider_name, provider_data in response.items():
-            if provider_name in {"page", "type", "mappings"}:
-                continue
+        provider_map = response.get("providers")
+        if isinstance(provider_map, dict):
+            sources = provider_map.items()
+        else:
+            sources = (
+                (name, value)
+                for name, value in response.items()
+                if name not in {"page", "type", "mappings", "anilistId", "anilist_id", "id", "title"}
+            )
+
+        for provider_name, provider_data in sources:
             if not isinstance(provider_data, dict):
                 continue
-
             grouped = provider_data.get("episodes")
+            if isinstance(grouped, list):
+                grouped = {"sub": grouped}
             if not isinstance(grouped, dict):
                 continue
 
@@ -73,7 +78,7 @@ class AnivexaProvider(Provider):
                 for item in items:
                     if not isinstance(item, dict):
                         continue
-                    number = item.get("number")
+                    number = item.get("number") or item.get("episode")
                     if not isinstance(number, int) or number < 1:
                         continue
                     external_id = item.get("id") or item.get("epSlug") or item.get("sourceNumber")
@@ -94,14 +99,16 @@ class AnivexaProvider(Provider):
                         )
                     )
 
-        # Some provider-filtered deployments may return a bare episodes object.
+        # Provider-filtered/current deployments can return a bare episode map.
         grouped = response.get("episodes")
+        if isinstance(grouped, list):
+            grouped = {"sub": grouped}
         if isinstance(grouped, dict):
             for language in ("sub", "dub"):
                 for item in grouped.get(language, []) or []:
                     if not isinstance(item, dict):
                         continue
-                    number = item.get("number")
+                    number = item.get("number") or item.get("episode")
                     if not isinstance(number, int) or number < 1:
                         continue
                     external_id = item.get("id") or item.get("epSlug") or item.get("sourceNumber")
