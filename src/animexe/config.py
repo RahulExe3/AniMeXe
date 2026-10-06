@@ -76,6 +76,14 @@ class NarrationConfig:
 
 
 @dataclass(frozen=True)
+class TTSConfig:
+    provider: str = "synthetic"
+    voice: str | None = None
+    command: tuple[str, ...] = ()
+    timeout_seconds: int = 180
+
+
+@dataclass(frozen=True)
 class VideoConfig:
     width: int = 1920
     height: int = 1080
@@ -111,6 +119,7 @@ class AppConfig:
     episode: EpisodeConfig = EpisodeConfig()
     llm: LLMConfig = LLMConfig()
     narration: NarrationConfig = NarrationConfig()
+    tts: TTSConfig = TTSConfig()
     video: VideoConfig = VideoConfig()
     audio: AudioConfig = AudioConfig()
     subtitles: SubtitleConfig = SubtitleConfig()
@@ -126,7 +135,7 @@ def _optional_string(value: Any) -> str | None:
     if value is None:
         return None
     value = str(value).strip()
-    if not value or (value.startswith("${") and value.endswith("}")):
+    if not value or (value.startswith(") and value.endswith(")):
         return None
     return value
 
@@ -143,6 +152,7 @@ def load_config(path: Path) -> AppConfig:
     episode = _section(expanded, "episode")
     llm = _section(expanded, "llm")
     narration = _section(expanded, "narration")
+    tts = _section(expanded, "tts")
     video = _section(expanded, "video")
     audio = _section(expanded, "audio")
     subtitles = _section(expanded, "subtitles")
@@ -192,6 +202,12 @@ def load_config(path: Path) -> AppConfig:
             max_duration_seconds=float(narration.get("max_duration_seconds", 135.0)),
             words_per_minute=int(narration.get("words_per_minute", 145)),
             speed=float(narration.get("speed", 1.0)),
+        ),
+        tts=TTSConfig(
+            provider=str(tts.get("provider", "synthetic")).lower(),
+            voice=_optional_string(tts.get("voice")),
+            command=tuple(str(item) for item in tts.get("command", []) if str(item).strip()),
+            timeout_seconds=int(tts.get("timeout_seconds", 180)),
         ),
         video=VideoConfig(
             width=int(video.get("width", 1920)),
@@ -243,6 +259,12 @@ def load_config(path: Path) -> AppConfig:
         raise ValueError("narration.words_per_minute must be between 60 and 220")
     if config.narration.speed <= 0:
         raise ValueError("narration.speed must be positive")
+    if config.tts.provider not in {"synthetic", "command"}:
+        raise ValueError("tts.provider must be synthetic or command")
+    if config.tts.provider == "command" and not config.tts.command:
+        raise ValueError("tts.command is required when tts.provider=command")
+    if config.tts.timeout_seconds < 1:
+        raise ValueError("tts.timeout_seconds must be positive")
     if config.episode.scene_threshold <= 0:
         raise ValueError("episode.scene_threshold must be positive")
     if config.episode.scene_min_duration <= 0:
