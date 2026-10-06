@@ -944,3 +944,13 @@ For the detailed blueprint, see docs/BUILD_PLAN.md, docs/PROVIDERS.md, docs/SCHE
 The first real milestone is a working multi-anime production engine that can register four anime, maintain independent episode progress, select two successful jobs per day, accept a supplied episode, analyze it, generate an original explanation and narration, match scenes, render a validated MP4, persist the result, resume failed work from checkpoints, and reproduce the process in GitHub Actions.
 
 YouTube publishing is not required for this milestone.
+
+### Transcript checkpoint
+
+AniMeXe now has a third analysis checkpoint: embedded timed subtitles are converted into normalized transcript segments and aligned to overlapping scene IDs. The input fingerprint is verified again before extraction. Episodes without a text subtitle track stop with an explicit error; the transcript interface remains ready for a future local ASR adapter.
+
+```bash
+python -m animexe episode transcript /path/to/episode.mkv
+```
+
+See `docs/ANALYSIS.md` for the analysis contracts.
