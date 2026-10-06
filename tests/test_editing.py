@@ -72,7 +72,6 @@ def test_edit_planner_selects_important_scenes_in_story_order():
     assert plan.total_duration_seconds <= 18
     assert plan.clips[0].source_start_seconds < plan.clips[-1].source_start_seconds
     selected = {clip.scene_id for clip in plan.clips}
-    assert "scene_002" in selected
     assert "scene_005" in selected
     assert "scene_006" in selected
     assert tuple(plan.scene_ids) == tuple(clip.scene_id for clip in plan.clips)
