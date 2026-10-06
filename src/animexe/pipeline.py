@@ -46,6 +46,19 @@ class PipelineResult:
         }
 
 
+def _find_background_music(paths: ProjectPaths, music_dir: str) -> Path | None:
+    root = Path(music_dir)
+    if not root.is_absolute():
+        root = paths.root / root
+    if not root.is_dir():
+        return None
+    candidates = sorted(
+        item for item in root.iterdir()
+        if item.is_file() and item.suffix.lower() in {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"}
+    )
+    return candidates[0] if candidates else None
+
+
 class EpisodePipeline:
     """Run the complete local-media production pipeline with checkpoint reuse."""
 
@@ -291,6 +304,13 @@ class EpisodePipeline:
                 narration_dir=tts_dir,
                 output_path=output_path,
                 subtitles=self.config.subtitles.enabled and self.config.subtitles.burn_in,
+                background_music=(
+                    _find_background_music(self.paths, self.config.audio.music_dir)
+                    if self.config.audio.bgm
+                    else None
+                ),
+                bgm_volume=self.config.audio.bgm_volume,
+                bgm_ducking_ratio=self.config.audio.bgm_ducking_ratio,
             )
         checkpoints["render"] = str(output_path)
 
