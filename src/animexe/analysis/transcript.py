@@ -94,9 +94,11 @@ class SubtitleTranscriptExtractor:
         self,
         *,
         ffmpeg_binary: str | None = None,
+        allow_missing_subtitles: bool = False,
         preferred_languages: tuple[str, ...] = ("eng", "en", "hin", "hi"),
     ) -> None:
         self.ffmpeg_binary = ffmpeg_binary or shutil.which("ffmpeg") or "ffmpeg"
+        self.allow_missing_subtitles = allow_missing_subtitles
         self.preferred_languages = tuple(
             value.lower() for value in preferred_languages if value.strip()
         )
@@ -115,6 +117,18 @@ class SubtitleTranscriptExtractor:
 
         stream = self._select_subtitle_stream(episode_manifest)
         if stream is None:
+            if self.allow_missing_subtitles:
+                return TranscriptAnalysisManifest(
+                    schema_version=1,
+                    episode_id=episode_id or episode_manifest.episode_id,
+                    input_path=str(path),
+                    input_sha256=episode_manifest.input_sha256,
+                    source="none",
+                    language=None,
+                    subtitle_stream_index=None,
+                    transcript_status="READY",
+                    segments=(),
+                )
             raise TranscriptError(
                 "no embedded text subtitle stream is available; install/configure "
                 "an ASR backend for audio transcription"
@@ -124,6 +138,18 @@ class SubtitleTranscriptExtractor:
         self._extract_subtitle(path, stream.index, subtitle_path)
         segments = self._parse_srt(subtitle_path.read_text(encoding="utf-8-sig"))
         if not segments:
+            if self.allow_missing_subtitles:
+                return TranscriptAnalysisManifest(
+                    schema_version=1,
+                    episode_id=episode_id or episode_manifest.episode_id,
+                    input_path=str(path),
+                    input_sha256=episode_manifest.input_sha256,
+                    source="none",
+                    language=stream.language,
+                    subtitle_stream_index=stream.index,
+                    transcript_status="READY",
+                    segments=(),
+                )
             raise TranscriptError("embedded subtitle stream produced no timed captions")
 
         aligned = tuple(
