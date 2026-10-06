@@ -4,9 +4,9 @@ AniMeXe uses Gemini as an optional semantic layer after local episode inspection
 
 ## Current model
 
-The default model is `gemini-3.8-flash`. It is currently a stable Gemini 3 model and supports multimodal inputs and structured outputs. Google recommends the current stable Flash family for new applications. citeturn168765search1turn168765search2
+The default model is `gemini-3.8-flash`. It is currently a stable Gemini 3 model and supports multimodal inputs and structured outputs. Google recommends the current stable Flash family for new applications.
 
-The integration deliberately uses the Google GenAI Python SDK and a `GEMINI_API_KEY` environment variable. The key must never be written into repository files or persisted state. Google documents environment variables as the recommended authentication pattern. citeturn446884search0turn446884search1
+The integration deliberately uses the Google GenAI Python SDK and a `GEMINI_API_KEY` environment variable. The key must never be written into repository files or persisted state. Google documents environment variables as the recommended authentication pattern.
 
 ## Data flow
 
