@@ -363,15 +363,24 @@ class GeminiNarrationScriptGenerator:
             )
             for attempt in range(len(backoff) + 1):
                 try:
+                    request_config = dict(generation_config)
+                    request_prompt = prompt
+                    if attempt == len(backoff):
+                        # Last-chance compatibility path: some Gemini service-side 503s
+                        # are triggered by structured-output requests. Fall back to the
+                        # same plain JSON REST shape used by YTAutoPilot.
+                        request_config.pop("responseSchema", None)
+                        request_prompt = (
+                            prompt
+                            + "\n\nReturn ONLY a valid JSON object. Do not use markdown fences."
+                        )
                     response = requests.post(
                         url,
-                        headers={
-                            "x-goog-api-key": api_key,
-                            "Content-Type": "application/json",
-                        },
+                        params={"key": api_key},
+                        headers={"Content-Type": "application/json"},
                         json={
-                            "contents": [{"parts": [{"text": prompt}]}],
-                            "generationConfig": generation_config,
+                            "contents": [{"parts": [{"text": request_prompt}]}],
+                            "generationConfig": request_config,
                         },
                         timeout=90,
                     )
