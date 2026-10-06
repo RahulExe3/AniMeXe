@@ -287,7 +287,7 @@ def load_config(path: Path) -> AppConfig:
     if config.narration.speed <= 0:
         raise ValueError("narration.speed must be positive")
     if config.tts.provider not in {"synthetic", "command", "gemini"}:
-        raise ValueError("tts.provider must be synthetic or command")
+        raise ValueError("tts.provider must be synthetic, command, or gemini")
     if config.tts.provider == "command" and not config.tts.command:
         raise ValueError("tts.command is required when tts.provider=command")
     if config.tts.provider == "gemini":
