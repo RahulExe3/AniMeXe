@@ -188,7 +188,7 @@ jobs:
 
       - name: Extract transcript
         run: |
-          python -m animexe episode transcript "$EPISODE"
+          python -m animexe episode transcript "$EPISODE" --allow-missing-subtitles
 
       - name: Understand story
         run: |
