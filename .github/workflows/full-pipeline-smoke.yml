@@ -123,50 +123,47 @@ jobs:
 
           ffprobe -v error -show_entries format=duration             -of default=noprint_wrappers=1:nokey=1 workspace/e2e/test-episode.mkv
 
-      - name: Inspect episode
+      - name: Run complete pipeline
         run: >
-          python -m animexe episode inspect workspace/e2e/test-episode.mkv
-          --anime-id anilist:21 --episode-number 1 --season 1
+          python -m animexe episode run workspace/e2e/test-episode.mkv
+          --anime-id anilist:21
+          --episode-number 1
+          --season 1
+          | tee workspace/e2e/first-run.json
 
-      - name: Detect scenes
+      - name: Resume complete pipeline from checkpoints
         run: >
-          python -m animexe episode scenes workspace/e2e/test-episode.mkv
-          --anime-id anilist:21 --episode-number 1 --season 1
+          python -m animexe episode run workspace/e2e/test-episode.mkv
+          --anime-id anilist:21
+          --episode-number 1
+          --season 1
+          | tee workspace/e2e/resume-run.json
 
-      - name: Extract transcript
-        run: >
-          python -m animexe episode transcript workspace/e2e/test-episode.mkv
-          --anime-id anilist:21 --episode-number 1 --season 1
+      - name: Verify checkpoint recovery
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
 
-      - name: Gemini semantic story
-        run: >
-          python -m animexe episode story workspace/e2e/test-episode.mkv
-          --anime-id anilist:21 --episode-number 1 --season 1 --mode gemini
+          report = json.loads(Path("workspace/e2e/resume-run.json").read_text())
+          expected = {
+              "inspected",
+              "scenes",
+              "transcript",
+              "story",
+              "script",
+              "tts",
+              "matching",
+              "timeline",
+              "render",
+          }
+          resumed = set(report.get("resumed", []))
+          missing = expected - resumed
+          if missing:
+              raise SystemExit(f"resume did not reuse checkpoints: {sorted(missing)}")
+          print("Checkpoint recovery verified:", sorted(resumed))
+          PY
 
-      - name: Gemini narration script
-        run: >
-          python -m animexe episode script workspace/e2e/test-episode.mkv
-          --anime-id anilist:21 --episode-number 1 --season 1
-
-      - name: Gemini Flash TTS
-        run: >
-          python -m animexe episode tts workspace/e2e/test-episode.mkv
-          --anime-id anilist:21 --episode-number 1 --season 1 --provider gemini
-
-      - name: Match narration to scenes
-        run: >
-          python -m animexe episode match workspace/e2e/test-episode.mkv
-          --anime-id anilist:21 --episode-number 1 --season 1
-
-      - name: Build render timeline
-        run: >
-          python -m animexe episode timeline workspace/e2e/test-episode.mkv
-          --anime-id anilist:21 --episode-number 1 --season 1
-
-      - name: Render final MP4
-        run: >
-          python -m animexe episode render workspace/e2e/test-episode.mkv
-          --anime-id anilist:21 --episode-number 1 --season 1
 
       - name: Validate rendered output
         run: |
