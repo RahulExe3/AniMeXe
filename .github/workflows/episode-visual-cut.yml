@@ -24,7 +24,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: \${{ github.workflow }}-\${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
-      GEMINI_API_KEY: \${{ secrets.GEMINI_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
     steps:
       - name: Check out repository
@@ -77,8 +77,8 @@ jobs:
           data["llm"]["thinking_level"] = "low"
           data["llm"]["max_frames"] = 8
           data["llm"]["max_output_tokens"] = 6000
-          target = float("\${{ inputs.target_duration_seconds }}")
-          if "\${{ inputs.input_mode }}" == "synthetic":
+          target = float("${{ inputs.target_duration_seconds }}")
+          if "${{ inputs.input_mode }}" == "synthetic":
               data["narration"]["target_duration_seconds"] = min(target, 20.0)
               data["narration"]["min_duration_seconds"] = min(15.0, data["narration"]["target_duration_seconds"])
               data["narration"]["max_duration_seconds"] = max(
@@ -98,13 +98,13 @@ jobs:
       - name: Prepare episode input
         run: |
           mkdir -p workspace/input workspace/e2e
-          if [ "\${{ inputs.input_mode }}" = "workspace" ]; then
-            test -s "\${{ inputs.input_path }}" || {
-              echo "::error::Episode file not found at '\${{ inputs.input_path }}'."
+          if [ "${{ inputs.input_mode }}" = "workspace" ]; then
+            test -s "${{ inputs.input_path }}" || {
+              echo "::error::Episode file not found at '${{ inputs.input_path }}'."
               echo "For real episodes, the file must be provisioned to the runner before this workflow starts."
               exit 1
             }
-            cp "\${{ inputs.input_path }}" workspace/e2e/source-episode.mkv
+            cp "${{ inputs.input_path }}" workspace/e2e/source-episode.mkv
             echo "EPISODE=workspace/e2e/source-episode.mkv" >> "$GITHUB_ENV"
             exit 0
           fi
@@ -163,9 +163,13 @@ jobs:
 
       - name: Build narration-free visual cut
         run: |
+          TARGET_SECONDS="${{ inputs.target_duration_seconds }}"
+          if [ "${{ inputs.input_mode }}" = "synthetic" ]; then
+            TARGET_SECONDS="20"
+          fi
           python -m animexe episode visual-cut \
             "$EPISODE" \
-            --target-duration-seconds "\${{ inputs.target_duration_seconds }}"
+            --target-duration-seconds "$TARGET_SECONDS"
 
       - name: Validate video-only output
         run: |
@@ -188,7 +192,7 @@ jobs:
           PY
 
       - name: Upload visual-cut artifact
-        if: \${{ always() }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
           name: animexe-episode-visual-cut
