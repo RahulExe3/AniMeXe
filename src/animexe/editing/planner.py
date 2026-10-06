@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ..analysis.scenes import SceneAnalysisManifest, SceneRecord
-from ..analysis.story import EpisodeStoryManifest, StoryEvent
+from ..analysis.story import EpisodeStoryManifest, StoryEvent, StoryEvidence
 
 
 class EditPlanError(RuntimeError):
