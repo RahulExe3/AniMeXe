@@ -5,7 +5,7 @@
 **Status:** Foundation implementation in progress  
 **Repository:** Private  
 **Brand:** AniMeXe  
-**Current focus:** Build the core automation first. The runnable foundation now includes metadata/provider boundaries plus `inspected`, `scenes`, `transcript`, Gemini semantic `story`, and original bilingual `script` checkpoints. YouTube publishing is intentionally out of scope for the initial implementation.
+**Current focus:** Build the core automation first. The runnable foundation now includes metadata/provider boundaries plus `inspected`, `scenes`, `transcript`, Gemini semantic `story`, original bilingual `script`, measured `TTS`, `matching`, `timeline`, and `render` checkpoints. YouTube publishing is intentionally out of scope for the initial implementation.
 
 ## 1. Vision
 
@@ -637,6 +637,7 @@ AniMeXe/
 │   ├── PIPELINE.md
 │   ├── PROVIDERS.md
 │   ├── TTS.md
+│   └── RENDERING.md
 │   ├── RENDERING.md
 │   ├── ROADMAP.md
 │   └── NARRATION.md
@@ -976,7 +977,7 @@ An episode can resume from its last successful stage instead of restarting from 
 
 Example:
 
-input ✓ → metadata ✓ → scenes ✓ → transcript ✓ → story ✓ → script ✓ → TTS ✓ → matching ✓ → render pending
+input ✓ → metadata ✓ → scenes ✓ → transcript ✓ → story ✓ → script ✓ → TTS ✓ → matching ✓ → timeline ✓ → render ✓
 
 This is required both locally and in GitHub Actions.
 
