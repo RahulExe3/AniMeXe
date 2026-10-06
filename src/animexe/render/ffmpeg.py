@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -8,7 +9,7 @@ from .timeline import RenderError, TimelineManifest
 
 
 class FFmpegRenderer:
-    """Render a timeline with muted source audio and measured narration audio."""
+    """Render a timeline with muted source audio and optional ducked BGM."""
 
     def __init__(
         self,
@@ -31,12 +32,19 @@ class FFmpegRenderer:
         narration_dir: Path,
         output_path: Path,
         subtitles: bool = True,
+        background_music: Path | None = None,
+        bgm_volume: float = 0.12,
+        bgm_ducking_ratio: float = 8.0,
     ) -> Path:
         self._require_tools()
         if not source_video.is_file():
             raise RenderError(f"source video not found: {source_video}")
         if not timeline.clips:
             raise RenderError("timeline contains no video clips")
+        if not 0.0 <= bgm_volume <= 1.0:
+            raise RenderError("bgm_volume must be between 0 and 1")
+        if bgm_ducking_ratio < 1.0:
+            raise RenderError("bgm_ducking_ratio must be at least 1")
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         subtitle_path = output_path.with_suffix(".srt")
@@ -49,12 +57,18 @@ class FFmpegRenderer:
                 raise RenderError(f"narration audio not found: {audio_path}")
             command.extend(["-i", str(audio_path)])
 
+        bgm_input_index: int | None = None
+        if background_music is not None:
+            music_path = background_music.expanduser().resolve()
+            if not music_path.is_file():
+                raise RenderError(f"background music file not found: {music_path}")
+            bgm_input_index = 1 + len(timeline.narration_audio)
+            command.extend(["-stream_loop", "-1", "-i", str(music_path)])
+
         filters: list[str] = []
         video_labels: list[str] = []
         split_inputs = "".join(f"[src{index}]" for index in range(len(timeline.clips)))
-        filters.append(
-            f"[0:v]split={len(timeline.clips)}{split_inputs}"
-        )
+        filters.append(f"[0:v]split={len(timeline.clips)}{split_inputs}")
 
         for index, clip in enumerate(timeline.clips):
             label = f"v{index}"
@@ -82,21 +96,41 @@ class FFmpegRenderer:
 
         audio_labels: list[str] = []
         for index, event in enumerate(timeline.narration_audio, start=1):
-            input_index = index
             label = f"a{index}"
             audio_labels.append(f"[{label}]")
             delay_ms = int(round(event.start_seconds * 1000))
             filters.append(
-                f"[{input_index}:a]adelay={delay_ms}:all=1[{label}]"
+                f"[{index}:a]adelay={delay_ms}:all=1[{label}]"
             )
 
+        if not audio_labels:
+            raise RenderError("timeline contains no narration audio")
+
         if len(audio_labels) == 1:
-            filters.append(f"{audio_labels[0]}anull[aout]")
+            filters.append(f"{audio_labels[0]}anull[narration]")
         else:
             filters.append(
                 "".join(audio_labels)
-                + f"amix=inputs={len(audio_labels)}:duration=longest:dropout_transition=0[aout]"
+                + f"amix=inputs={len(audio_labels)}:duration=longest:"
+                "dropout_transition=0:normalize=0[narration]"
             )
+
+        if bgm_input_index is not None:
+            filters.append(
+                f"[{bgm_input_index}:a]atrim=duration={timeline.total_duration_seconds:.3f},"
+                f"volume={bgm_volume:.4f}[bgm]"
+            )
+            filters.append(
+                f"[bgm][narration]sidechaincompress="
+                f"threshold=0.05:ratio={bgm_ducking_ratio:.3f}:attack=20:release=280:makeup=1"
+                "[ducked_bgm]"
+            )
+            filters.append(
+                "[ducked_bgm][narration]amix=inputs=2:duration=first:"
+                "dropout_transition=0:normalize=0[aout]"
+            )
+        else:
+            filters.append("[narration]anull[aout]")
 
         command.extend(
             [
@@ -140,6 +174,8 @@ class FFmpegRenderer:
             )
         if not output_path.is_file() or output_path.stat().st_size <= 0:
             raise RenderError(f"ffmpeg did not create a usable output: {output_path}")
+
+        self._validate_output(output_path)
         return output_path
 
     @staticmethod
@@ -155,6 +191,55 @@ class FFmpegRenderer:
                 ]
             )
         path.write_text("\n".join(lines), encoding="utf-8")
+
+    @staticmethod
+    def _validate_output(path: Path) -> None:
+        try:
+            completed = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-print_format",
+                    "json",
+                    "-show_streams",
+                    "-show_format",
+                    str(path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise RenderError(f"ffprobe could not validate render: {exc}") from exc
+
+        if completed.returncode != 0:
+            raise RenderError(
+                f"ffprobe could not validate render: "
+                f"{completed.stderr.strip() or 'unknown error'}"
+            )
+
+        try:
+            payload = json.loads(completed.stdout)
+            streams = payload.get("streams", [])
+            duration = float((payload.get("format") or {}).get("duration") or 0)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise RenderError("ffprobe returned invalid render metadata") from exc
+
+        kinds = {
+            stream.get("codec_type")
+            for stream in streams
+            if isinstance(stream, dict)
+        }
+        if "video" not in kinds:
+            raise RenderError("rendered output contains no video stream")
+        if "audio" not in kinds:
+            raise RenderError("rendered output contains no narration audio stream")
+        if duration <= 0:
+            raise RenderError("rendered output has an invalid duration")
+        if duration < 1.0:
+            raise RenderError(f"rendered output is unexpectedly short: {duration:.3f}s")
 
     @staticmethod
     def _require_tools() -> None:
@@ -175,4 +260,4 @@ def _clean_srt_text(value: str) -> str:
 
 
 def _escape_filter_path(value: str) -> str:
-    return value.replace("\\", "\\\\").replace(":", "\:").replace("'", "\\'")
+    return value.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
