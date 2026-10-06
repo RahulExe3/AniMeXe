@@ -349,6 +349,26 @@ The processing layer may use temporary disk space when required by FFmpeg, scene
 
 This keeps GitHub Actions and other workers from accumulating episode files while preserving reliable checkpointed processing. If a provider supports range requests, HLS/DASH segments, or timestamp-based extraction, the media adapter should prefer targeted retrieval over downloading the complete episode.
 
+## Provider orchestration
+
+AniMeXe now supports one primary provider plus optional catalog/availability fallbacks. The runtime can fan out an episode check across configured providers and select the strongest currently available catalog result.
+
+Current runtime adapters:
+
+- **Kuhi** — primary catalog/episode provider.
+- **Anivexa** — secondary catalog/episode provider.
+- **AniVault** — secondary catalog/episode provider.
+- **Local** — supplied local media input.
+
+Use:
+
+```bash
+python -m animexe provider status
+python -m animexe provider check anilist:21 --episode-number 1 --language sub
+```
+
+For hosted smoke testing, `.github/workflows/provider-smoke.yml` is manual-only. Set provider API endpoints as GitHub repository Variables. Stream extraction/proxy/decryption behavior from third-party aggregator projects is intentionally not embedded in AniMeXe; media enters processing through an authorized/local source boundary.
+
 ## 10. Episode analysis
 
 ### 10.1 Technical inspection
