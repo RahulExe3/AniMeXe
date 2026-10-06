@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 import math
 import os
@@ -338,7 +339,7 @@ def _extract_gemini_audio(response: object) -> bytes:
                 if isinstance(data, str) and data.strip():
                     try:
                         return base64.b64decode(data)
-                    except (ValueError, __import__('binascii').Error):
+                    except (ValueError, binascii.Error):
                         continue
     except Exception:
         return b""
