@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
+
+import requests
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -269,17 +272,21 @@ class GeminiNarrationScriptGenerator:
         )
 
         try:
-            response = self._client_or_create().models.generate_content(
-                model=self.model,
-                contents=[prompt],
-                config=self._generation_config(),
-            )
+            if self._client is not None:
+                response = self._client.models.generate_content(
+                    model=self.model,
+                    contents=[prompt],
+                    config=self._generation_config(),
+                )
+                response_text = getattr(response, "text", None)
+                used_model = self.model
+            else:
+                response_text, used_model = self._rest_generate(prompt)
         except Exception as exc:
             raise NarrationScriptError(
                 f"Gemini narration-script request failed: {exc}"
             ) from exc
 
-        response_text = getattr(response, "text", None)
         if not isinstance(response_text, str) or not response_text.strip():
             raise NarrationScriptError("Gemini returned an empty narration script")
 
@@ -298,9 +305,10 @@ class GeminiNarrationScriptGenerator:
             script=script,
             style=style,
             source_story=source_story,
+            model=used_model,
         )
 
-    def _client_or_create(self) -> _ResponseClient:
+    def _rest_generate(self) -> _ResponseClient:
         if self._client is not None:
             return self._client
         api_key = os.environ.get(self.api_key_env, "").strip()
