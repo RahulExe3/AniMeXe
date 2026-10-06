@@ -82,7 +82,7 @@ The current checkpoint chain is:
 input → inspected → scenes → transcript → story → script → TTS → matching → render
 \`\`\`
 
-Only the first transition is implemented in this slice. Later stages must consume the manifest rather than re-probing the source independently.
+The `inspected`, `scenes`, and `transcript` transitions are now implemented. Later stages must consume these manifests rather than re-probing or reparsing the source independently.
 
 ## Design rules
 
