@@ -33,6 +33,7 @@ from .tts import CommandTTSSynthesizer, GeminiTTSSynthesizer, SyntheticTTSSynthe
 from .matching import MatchError, SceneMatchManifest, SceneMatcher
 from .render import FFmpegRenderer, RenderError, TimelineBuilder, TimelineManifest
 from .paths import ProjectPaths
+from .pipeline import EpisodePipeline, PipelineError
 from .providers import ProviderBroker, build_registry
 from .scheduler import Scheduler
 from .state import StateStore
@@ -225,6 +226,15 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="do not burn narration subtitles into the video",
     )
+
+    episode_run = episode_sub.add_parser(
+        "run",
+        help="run/resume the complete episode production pipeline",
+    )
+    episode_run.add_argument("input_path", type=Path)
+    episode_run.add_argument("--anime-id")
+    episode_run.add_argument("--episode-number", type=int)
+    episode_run.add_argument("--season", type=int, default=1)
 
     providers = sub.add_parser("provider", help="inspect configured episode providers")
     provider_sub = providers.add_subparsers(dest="provider_command", required=True)
@@ -1144,6 +1154,23 @@ def main() -> None:
                 }
             )
             return
+
+    if args.command == "episode" and args.episode_command == "run":
+        config_path = paths.config / "config.yml"
+        if not config_path.exists():
+            config_path = paths.config / "config.example.yml"
+        try:
+            app_config = load_config(config_path)
+            result = EpisodePipeline(paths, app_config).run(
+                args.input_path,
+                anime_id=args.anime_id,
+                episode_number=args.episode_number,
+                season=args.season,
+            )
+        except (PipelineError, OSError, ValueError, TypeError, KeyError) as exc:
+            parser.error(str(exc))
+        _print_json(result.to_dict())
+        return
 
     if args.command == "provider":
         config_path = paths.config / "config.yml"
