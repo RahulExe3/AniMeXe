@@ -5,7 +5,7 @@
 **Status:** Foundation implementation in progress  
 **Repository:** Private  
 **Brand:** AniMeXe  
-**Current focus:** Build the core automation first. The runnable foundation now includes metadata/provider boundaries and the first episode-analysis checkpoint. YouTube publishing is intentionally out of scope for the initial implementation.
+**Current focus:** Build the core automation first. The runnable foundation now includes metadata/provider boundaries plus the `inspected` and `scenes` episode-analysis checkpoints. YouTube publishing is intentionally out of scope for the initial implementation.
 
 ## 1. Vision
 
@@ -365,6 +365,19 @@ Extract:
 - scene timestamps
 
 FFmpeg is the primary media-processing dependency.
+
+
+### Scene indexing checkpoint
+
+The analysis layer now detects shot changes with PySceneDetect, extracts compact representative frames through FFmpeg, and persists a fingerprinted scene manifest. The scene index is the visual substrate for later transcript alignment and story understanding.
+
+CLI:
+
+```bash
+python -m animexe episode scenes /path/to/episode.mkv
+```
+
+See `docs/ANALYSIS.md` for the manifest contract and checkpoint behavior.
 
 ### 10.2 Scene detection
 
