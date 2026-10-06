@@ -99,6 +99,9 @@ class VideoConfig:
 class AudioConfig:
     mute_source: bool = True
     bgm: bool = True
+    music_dir: str = "assets/music"
+    bgm_volume: float = 0.12
+    bgm_ducking_ratio: float = 8.0
     sfx: str = "optional"
 
 
@@ -240,6 +243,9 @@ def load_config(path: Path) -> AppConfig:
         audio=AudioConfig(
             mute_source=bool(audio.get("mute_source", True)),
             bgm=bool(audio.get("bgm", True)),
+            music_dir=str(audio.get("music_dir", "assets/music")),
+            bgm_volume=float(audio.get("bgm_volume", 0.12)),
+            bgm_ducking_ratio=float(audio.get("bgm_ducking_ratio", 8.0)),
             sfx=str(audio.get("sfx", "optional")),
         ),
         subtitles=SubtitleConfig(
@@ -303,6 +309,12 @@ def load_config(path: Path) -> AppConfig:
         raise ValueError("llm.thinking_level must be low, medium, or high for Gemini 3.8")
     if config.tts.timeout_seconds < 1:
         raise ValueError("tts.timeout_seconds must be positive")
+    if not config.audio.music_dir.strip():
+        raise ValueError("audio.music_dir cannot be empty")
+    if not 0.0 <= config.audio.bgm_volume <= 1.0:
+        raise ValueError("audio.bgm_volume must be between 0 and 1")
+    if config.audio.bgm_ducking_ratio < 1.0:
+        raise ValueError("audio.bgm_ducking_ratio must be at least 1")
     if config.episode.scene_threshold <= 0:
         raise ValueError("episode.scene_threshold must be positive")
     if config.episode.scene_min_duration <= 0:
