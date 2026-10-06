@@ -366,4 +366,4 @@ Completed in the current implementation slice:
 - embedded subtitle transcript extraction with scene alignment and input fingerprint validation.
 - deterministic extractive story evidence with scene-linked events and persistent story checkpoints.
 
-Next implementation slice: **LLM-backed story understanding from transcript + scene evidence**.
+Next implementation slice: **production-hardening of provider-driven episode acquisition, visual quality, and the GitHub Actions worker**.
