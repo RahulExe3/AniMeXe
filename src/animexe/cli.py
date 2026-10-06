@@ -24,6 +24,7 @@ from .config import load_config
 from .logging import configure_logging
 from .metadata import MetadataLibrary, MetadataService
 from .models import AnimeRecord, EpisodeRecord
+from .narration import GeminiNarrationScriptGenerator, NarrationScriptError
 from .paths import ProjectPaths
 from .scheduler import Scheduler
 from .state import StateStore
@@ -126,6 +127,36 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=("extractive", "gemini"),
         default="extractive",
         help="story analysis backend (default: extractive)",
+    )
+
+    episode_script = episode_sub.add_parser(
+        "script",
+        help="generate an original narration script from story understanding",
+    )
+    episode_script.add_argument("input_path", type=Path)
+    episode_script.add_argument("--story-manifest", type=Path)
+    episode_script.add_argument("--transcript-manifest", type=Path)
+    episode_script.add_argument("--anime-id")
+    episode_script.add_argument("--episode-number", type=int)
+    episode_script.add_argument("--season", type=int, default=1)
+    episode_script.add_argument("--output", type=Path)
+    episode_script.add_argument(
+        "--provider",
+        choices=("gemini",),
+        default=None,
+        help="narration-script provider (default: configured llm provider)",
+    )
+    episode_script.add_argument(
+        "--language",
+        choices=("english", "hinglish"),
+        default=None,
+        help="narration language (default: configured narration.language)",
+    )
+    episode_script.add_argument(
+        "--script",
+        choices=("latin", "roman"),
+        default=None,
+        help="writing system: latin for English, roman for Hinglish",
     )
 
     sub.add_parser("plan", help="show the scheduler's next job plan")
@@ -561,6 +592,124 @@ def main() -> None:
                     "scene_manifest_path": str(scene_path),
                     "transcript_manifest_path": str(transcript_path),
                     "story_manifest_path": str(output_path),
+                }
+            )
+            return
+
+    if args.command == "episode":
+        if args.episode_command == "script":
+            if (args.anime_id is None) != (args.episode_number is None):
+                parser.error("--anime-id and --episode-number must be supplied together")
+            if args.season < 1:
+                parser.error("--season must be >= 1")
+            if args.episode_number is not None and args.episode_number < 1:
+                parser.error("--episode-number must be >= 1")
+
+            story_path = args.story_manifest or (
+                paths.workspace
+                / "analysis"
+                / args.input_path.stem
+                / "story.json"
+            )
+            transcript_path = args.transcript_manifest or (
+                paths.workspace
+                / "analysis"
+                / args.input_path.stem
+                / "transcript.json"
+            )
+
+            try:
+                story_manifest = EpisodeStoryManifest.read(story_path)
+                transcript_manifest = TranscriptAnalysisManifest.read(transcript_path)
+            except (OSError, ValueError, TypeError, KeyError) as exc:
+                parser.error(f"could not read story/transcript manifests: {exc}")
+
+            config_path = paths.config / "config.yml"
+            if not config_path.exists():
+                config_path = paths.config / "config.example.yml"
+            app_config = load_config(config_path)
+
+            provider = (args.provider or app_config.llm.provider).strip().lower()
+            if provider != "gemini":
+                parser.error(
+                    f"narration script provider {provider!r} is not implemented; "
+                    "set llm.provider to gemini"
+                )
+
+            language = args.language or app_config.narration.language
+            script_format = args.script or app_config.narration.script
+            output_path = args.output or (
+                paths.workspace
+                / "narration"
+                / args.input_path.stem
+                / "script.json"
+            )
+
+            try:
+                generator = GeminiNarrationScriptGenerator(
+                    model=app_config.llm.model,
+                    api_key_env=app_config.llm.api_key_env,
+                    temperature=app_config.llm.temperature,
+                    max_output_tokens=app_config.llm.max_output_tokens,
+                    target_duration_seconds=app_config.narration.target_duration_seconds,
+                    min_duration_seconds=app_config.narration.min_duration_seconds,
+                    max_duration_seconds=app_config.narration.max_duration_seconds,
+                    words_per_minute=app_config.narration.words_per_minute,
+                )
+                script_manifest = generator.generate(
+                    story_manifest,
+                    transcript=transcript_manifest,
+                    language=language,
+                    script=script_format,
+                    style=app_config.narration.style,
+                    source_story=str(story_path),
+                )
+            except NarrationScriptError as exc:
+                parser.error(str(exc))
+
+            script_manifest.write(output_path)
+
+            if args.anime_id:
+                assert args.episode_number is not None
+                episode_id = f"{args.anime_id}-s{args.season}-e{args.episode_number}"
+                existing = {
+                    item.id: item
+                    for item in store.list_episodes(args.anime_id)
+                }.get(episode_id)
+                record = existing or EpisodeRecord(
+                    id=episode_id,
+                    anime_id=args.anime_id,
+                    episode_number=args.episode_number,
+                )
+                record.status = "PROCESSING"
+                record.current_checkpoint = "script"
+                record.failure_reason = None
+                record.provider = "local"
+                record.source_reference = str(
+                    args.input_path.expanduser().resolve()
+                )
+                record.analysis_manifest = str(
+                    paths.workspace
+                    / "analysis"
+                    / f"{args.input_path.stem}.analysis.json"
+                )
+                record.scene_manifest = str(
+                    paths.workspace
+                    / "analysis"
+                    / args.input_path.stem
+                    / "scenes.json"
+                )
+                record.transcript_manifest = str(transcript_path)
+                record.story_manifest = str(story_path)
+                record.script_manifest = str(output_path)
+                store.save_episode(record)
+
+            _print_json(
+                script_manifest.to_dict()
+                | {
+                    "story_manifest_path": str(story_path),
+                    "transcript_manifest_path": str(transcript_path),
+                    "script_manifest_path": str(output_path),
                 }
             )
             return
