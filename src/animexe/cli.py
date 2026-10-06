@@ -45,6 +45,20 @@ def _project_paths() -> ProjectPaths:
     return paths
 
 
+
+def _find_background_music(paths: ProjectPaths, music_dir: str) -> Path | None:
+    root = Path(music_dir)
+    if not root.is_absolute():
+        root = paths.root / root
+    if not root.is_dir():
+        return None
+    candidates = sorted(
+        item for item in root.iterdir()
+        if item.is_file() and item.suffix.lower() in {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"}
+    )
+    return candidates[0] if candidates else None
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="animexe",
@@ -1120,6 +1134,13 @@ def main() -> None:
                     subtitles=app_config.subtitles.enabled
                     and app_config.subtitles.burn_in
                     and not args.no_subtitles,
+                    background_music=(
+                        _find_background_music(paths, app_config.audio.music_dir)
+                        if app_config.audio.bgm
+                        else None
+                    ),
+                    bgm_volume=app_config.audio.bgm_volume,
+                    bgm_ducking_ratio=app_config.audio.bgm_ducking_ratio,
                 )
             except RenderError as exc:
                 parser.error(str(exc))
