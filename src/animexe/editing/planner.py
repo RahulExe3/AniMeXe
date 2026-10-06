@@ -126,7 +126,7 @@ class EditPlanner:
     ) -> None:
         if min_duration_seconds <= 0 or target_duration_seconds <= 0 or max_duration_seconds <= 0:
             raise ValueError("edit-plan duration bounds must be positive")
-        if min_duration_seconds > target_duration_seconds > max_duration_seconds:
+        if not min_duration_seconds <= target_duration_seconds <= max_duration_seconds:
             raise ValueError("target duration must be within edit-plan duration bounds")
         if max_clip_duration_seconds <= 0:
             raise ValueError("max_clip_duration_seconds must be positive")
