@@ -173,15 +173,17 @@ It produces a declarative matching manifest with source-scene intervals and narr
 Future scoring can add visual embeddings, entity recognition, transcript overlap, and richer repetition penalties without changing the manifest boundary.
 
 ### Phase 11 — Audio, subtitles, and rendering
-Build:
+
+The first renderable pipeline slice is now implemented:
 - source-audio mute;
-- narration mix;
-- ducked BGM;
-- optional SFX;
-- clean subtitle generation;
-- burned-in subtitles;
-- FFmpeg rendering;
-- final media validation.
+- measured narration mix;
+- declarative timeline;
+- SRT subtitle generation;
+- optional burned-in subtitles;
+- FFmpeg H.264/AAC rendering;
+- final output existence checks.
+
+BGM/SFX mixing and richer creative effects remain follow-up layers.
 
 Quality gates must reject incomplete or suspicious output.
 
