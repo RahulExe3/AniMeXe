@@ -114,6 +114,7 @@ class AppConfig:
     name: str = "AniMeXe"
     language: str = "hinglish"
     provider: ProviderConfig = ProviderConfig()
+    provider_fallbacks: tuple[ProviderConfig, ...] = ()
     metadata: MetadataConfig = MetadataConfig()
     scheduler: SchedulerConfig = SchedulerConfig()
     episode: EpisodeConfig = EpisodeConfig()
@@ -157,6 +158,18 @@ def load_config(path: Path) -> AppConfig:
     audio = _section(expanded, "audio")
     subtitles = _section(expanded, "subtitles")
     publishing = _section(expanded, "publishing")
+    fallback_values = expanded.get("provider_fallbacks", [])
+    if not isinstance(fallback_values, list):
+        fallback_values = []
+    provider_fallbacks = tuple(
+        ProviderConfig(
+            name=str(item.get("name", "")).strip(),
+            api_base_url=_optional_string(item.get("api_base_url")),
+            language=str(item.get("language", provider.get("language", "sub"))),
+        )
+        for item in fallback_values
+        if isinstance(item, dict) and str(item.get("name", "")).strip()
+    )
 
     config = AppConfig(
         name=str(project.get("name", "AniMeXe")),
@@ -166,6 +179,7 @@ def load_config(path: Path) -> AppConfig:
             api_base_url=_optional_string(provider.get("api_base_url")),
             language=str(provider.get("language", "sub")),
         ),
+        provider_fallbacks=provider_fallbacks,
         metadata=MetadataConfig(
             anilist_endpoint=str(metadata.get("anilist_endpoint", "https://graphql.anilist.co")),
             jikan_base_url=str(metadata.get("jikan_base_url", "https://api.jikan.moe/v4")),
@@ -229,6 +243,11 @@ def load_config(path: Path) -> AppConfig:
         ),
     )
 
+    provider_names = [config.provider.name.strip().lower(), *(item.name.strip().lower() for item in config.provider_fallbacks)]
+    if not config.provider.name.strip():
+        raise ValueError("provider.name cannot be empty")
+    if len(provider_names) != len(set(provider_names)):
+        raise ValueError("provider names must be unique")
     if config.metadata.search_limit < 1 or config.metadata.search_limit > 50:
         raise ValueError("metadata.search_limit must be between 1 and 50")
     if config.scheduler.max_active_anime < 1:
