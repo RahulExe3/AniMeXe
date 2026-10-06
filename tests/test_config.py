@@ -87,3 +87,30 @@ llm:
     assert config.llm.temperature == 0.35
     assert config.llm.max_output_tokens == 4000
     assert config.llm.max_frames == 12
+
+    
+def test_config_includes_narration_language_and_duration_targets(tmp_path: Path) -> None:
+    path = tmp_path / "config.yml"
+    path.write_text(
+        """
+project:
+  name: AniMeXe
+narration:
+  language: english
+  script: latin
+  target_duration_seconds: 120
+  min_duration_seconds: 105
+  max_duration_seconds: 135
+  words_per_minute: 150
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path)
+
+    assert config.narration.language == "english"
+    assert config.narration.script == "latin"
+    assert config.narration.target_duration_seconds == 120
+    assert config.narration.min_duration_seconds == 105
+    assert config.narration.max_duration_seconds == 135
+    assert config.narration.words_per_minute == 150
