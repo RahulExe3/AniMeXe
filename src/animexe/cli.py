@@ -170,6 +170,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     episode_tts.add_argument("input_path", type=Path)
     episode_tts.add_argument("--script-manifest", type=Path)
+    episode_tts.add_argument("--anime-id")
+    episode_tts.add_argument("--episode-number", type=int)
+    episode_tts.add_argument("--season", type=int, default=1)
     episode_tts.add_argument("--output", type=Path)
     episode_tts.add_argument(
         "--provider",
@@ -735,6 +738,13 @@ def main() -> None:
 
     if args.command == "episode":
         if args.episode_command == "tts":
+            if (args.anime_id is None) != (args.episode_number is None):
+                parser.error("--anime-id and --episode-number must be supplied together")
+            if args.season < 1:
+                parser.error("--season must be >= 1")
+            if args.episode_number is not None and args.episode_number < 1:
+                parser.error("--episode-number must be >= 1")
+
             script_path = args.script_manifest or (
                 paths.workspace
                 / "narration"
@@ -784,6 +794,29 @@ def main() -> None:
                 parser.error(str(exc))
 
             tts_manifest.write(output_manifest)
+
+            if args.anime_id:
+                assert args.episode_number is not None
+                episode_id = f"{args.anime_id}-s{args.season}-e{args.episode_number}"
+                existing = {
+                    item.id: item
+                    for item in store.list_episodes(args.anime_id)
+                }.get(episode_id)
+                record = existing or EpisodeRecord(
+                    id=episode_id,
+                    anime_id=args.anime_id,
+                    episode_number=args.episode_number,
+                )
+                record.status = "PROCESSING"
+                record.current_checkpoint = "TTS"
+                record.failure_reason = None
+                record.provider = "local"
+                record.source_reference = str(
+                    args.input_path.expanduser().resolve()
+                )
+                record.script_manifest = str(script_path)
+                record.tts_manifest = str(output_manifest)
+                store.save_episode(record)
 
             _print_json(
                 tts_manifest.to_dict()
