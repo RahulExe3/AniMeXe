@@ -9,12 +9,18 @@ on:
         type: choice
         options:
           - synthetic
+          - archive_public_domain
+          - direct_url
           - workspace
-        default: synthetic
+        default: archive_public_domain
       input_path:
-        description: "Path to an episode file already present on the runner/repository"
+        description: "Path to an episode file already present on the runner/repository (workspace mode only)"
         required: true
         default: "workspace/input/episode.mkv"
+      media_url:
+        description: "Authorized/direct media URL (direct_url mode only)"
+        required: false
+        default: ""
       target_duration_seconds:
         description: "Target duration for the visual explanation cut"
         required: true
@@ -97,14 +103,48 @@ jobs:
 
       - name: Prepare episode input
         run: |
+          set -euo pipefail
           mkdir -p workspace/input workspace/e2e
+
           if [ "${{ inputs.input_mode }}" = "workspace" ]; then
             test -s "${{ inputs.input_path }}" || {
               echo "::error::Episode file not found at '${{ inputs.input_path }}'."
-              echo "For real episodes, the file must be provisioned to the runner before this workflow starts."
               exit 1
             }
             cp "${{ inputs.input_path }}" workspace/e2e/source-episode.mkv
+            echo "EPISODE=workspace/e2e/source-episode.mkv" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          if [ "${{ inputs.input_mode }}" = "direct_url" ]; then
+            test -n "${{ inputs.media_url }}" || { echo "::error::media_url is required."; exit 1; }
+            curl --fail --location --retry 4 --retry-delay 3 --retry-all-errors \
+              --user-agent "AniMeXe/0.1" "${{ inputs.media_url }}" \
+              --output workspace/e2e/source-episode.mkv
+            test -s workspace/e2e/source-episode.mkv
+            echo "EPISODE=workspace/e2e/source-episode.mkv" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          if [ "${{ inputs.input_mode }}" = "archive_public_domain" ]; then
+            python - <<'PY'
+          import json, urllib.request
+          from pathlib import Path
+          item = "namakura-gatana-1917"
+          req = urllib.request.Request(f"https://archive.org/metadata/{item}", headers={"User-Agent":"AniMeXe/0.1"})
+          with urllib.request.urlopen(req, timeout=30) as response:
+              payload = json.load(response)
+          files = [f for f in payload.get("files", []) if isinstance(f, dict) and str(f.get("name", "")).lower().endswith((".mp4", ".mkv", ".webm", ".mov")) and "__ia_thumb" not in str(f.get("name", "")).lower()]
+          if not files: raise SystemExit("Allowlisted Archive.org item has no video file")
+          files.sort(key=lambda f: (0 if str(f["name"]).lower().endswith(".mp4") else 1, -int(f.get("size") or 0)))
+          Path("workspace/e2e/archive-source.json").write_text(json.dumps(files[0]), encoding="utf-8")
+          PY
+            ARCHIVE_FILE="$(python -c 'import json; print(json.load(open("workspace/e2e/archive-source.json"))["name"])')"
+            ARCHIVE_URL="$(python -c 'from urllib.parse import quote; import sys; print("https://archive.org/download/namakura-gatana-1917/" + quote(sys.argv[1], safe="/-_.~"))' "$ARCHIVE_FILE")"
+            curl --fail --location --retry 5 --retry-delay 4 --retry-all-errors \
+              --user-agent "AniMeXe/0.1" "$ARCHIVE_URL" \
+              --output workspace/e2e/source-episode.mkv
+            test -s workspace/e2e/source-episode.mkv
             echo "EPISODE=workspace/e2e/source-episode.mkv" >> "$GITHUB_ENV"
             exit 0
           fi
@@ -133,16 +173,9 @@ jobs:
             -f lavfi -i "color=c=green:s=640x360:r=30:d=6" \
             -f lavfi -i "color=c=purple:s=640x360:r=30:d=6" \
             -filter_complex "[0:v][1:v][2:v][3:v]concat=n=4:v=1:a=0,format=yuv420p[v]" \
-            -map "[v]" -c:v libx264 -preset ultrafast -crf 30 -an \
-            workspace/e2e/video-only.mkv
-
-          ffmpeg -hide_banner -loglevel error -y \
-            -i workspace/e2e/video-only.mkv \
-            -i workspace/e2e/transcript.srt \
-            -map 0:v:0 -map 1:0 \
-            -c:v copy -c:s srt -metadata:s:s:0 language=eng \
-            workspace/e2e/source-episode.mkv
-
+            -map "[v]" -c:v libx264 -preset ultrafast -crf 30 -an workspace/e2e/video-only.mkv
+          ffmpeg -hide_banner -loglevel error -y -i workspace/e2e/video-only.mkv -i workspace/e2e/transcript.srt \
+            -map 0:v:0 -map 1:0 -c:v copy -c:s srt -metadata:s:s:0 language=eng workspace/e2e/source-episode.mkv
           echo "EPISODE=workspace/e2e/source-episode.mkv" >> "$GITHUB_ENV"
 
       - name: Inspect episode
