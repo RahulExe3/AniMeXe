@@ -9,6 +9,13 @@ from .transcript import (
     TranscriptError,
     TranscriptSegment,
 )
+from .story import (
+    EpisodeStoryManifest,
+    ExtractiveStoryAnalyzer,
+    StoryAnalysisError,
+    StoryEvent,
+    StoryEvidence,
+)
 
 __all__ = [
     "EpisodeAnalysisManifest",
@@ -21,4 +28,9 @@ __all__ = [
     "TranscriptAnalysisManifest",
     "TranscriptError",
     "TranscriptSegment",
+    "EpisodeStoryManifest",
+    "ExtractiveStoryAnalyzer",
+    "StoryAnalysisError",
+    "StoryEvent",
+    "StoryEvidence",
 ]
