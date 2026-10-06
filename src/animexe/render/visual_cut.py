@@ -5,7 +5,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from ..editing import EditPlanManifest, PlannedClip
+from ..editing import EditPlanManifest
 from .timeline import RenderError
 
 
@@ -14,7 +14,7 @@ class VisualCutError(RenderError):
 
 
 class VisualCutRenderer:
-    """Render only the selected episode clips, with no audio track."""
+    """Render selected episode clips in one FFmpeg filter pass, with no audio."""
 
     def __init__(self, *, width: int = 1920, height: int = 1080, fps: int = 30) -> None:
         if width <= 0 or height <= 0 or fps <= 0:
@@ -38,21 +38,33 @@ class VisualCutRenderer:
             raise VisualCutError("edit plan contains no clips")
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        filters: list[str] = []
-        labels: list[str] = []
-        for index, clip in enumerate(plan.clips):
-            label = f"v{index}"
-            labels.append(f"[{label}]")
-            filters.append(
-                f"[0:v]trim=start={clip.source_start_seconds:.3f}:end={clip.source_end_seconds:.3f},"
-                f"setpts=PTS-STARTPTS,scale={self.width}:{self.height}:"
-                "force_original_aspect_ratio=decrease,"
-                f"pad={self.width}:{self.height}:(ow-iw)/2:(oh-ih)/2,fps={self.fps}[{label}]"
-            )
 
-        filters.append(
-            "".join(labels)
-            + f"concat=n={len(labels)}:v=1:a=0[vout]"
+        # The old implementation created one independent [0:v] trim/scale/fps
+        # branch per clip and then concatenated all branches. With many detected
+        # scenes that makes FFmpeg repeatedly process the same source frames.
+        # Select all required intervals in one pass instead, then normalize the
+        # already-selected frames once. This preserves chronological clip order
+        # and keeps rendering close to a single decode + encode operation.
+        clips = sorted(plan.clips, key=lambda clip: (clip.source_start_seconds, clip.source_end_seconds))
+        previous_end = -1.0
+        intervals: list[str] = []
+        for clip in clips:
+            start = float(clip.source_start_seconds)
+            end = float(clip.source_end_seconds)
+            if end <= start:
+                raise VisualCutError(f"invalid clip interval: {start:.3f}-{end:.3f}")
+            if start < previous_end - 0.001:
+                raise VisualCutError("visual-cut clips overlap; cannot safely render as a single-pass selection")
+            intervals.append(f"between(t,{start:.3f},{end:.3f})")
+            previous_end = end
+
+        select_expression = "+".join(intervals)
+        video_filter = (
+            f"select='{select_expression}',"
+            "setpts=N/FRAME_RATE/TB,"
+            f"scale={self.width}:{self.height}:force_original_aspect_ratio=decrease,"
+            f"pad={self.width}:{self.height}:(ow-iw)/2:(oh-ih)/2,"
+            f"fps={self.fps}"
         )
 
         command = [
@@ -61,30 +73,36 @@ class VisualCutRenderer:
             "error",
             "-i",
             str(source_video),
-            "-filter_complex",
-            ";".join(filters),
+            "-vf",
+            video_filter,
             "-map",
-            "[vout]",
+            "0:v:0",
             "-an",
             "-c:v",
             "libx264",
             "-preset",
-            "medium",
+            "veryfast",
             "-crf",
             "20",
             "-pix_fmt",
             "yuv420p",
             "-movflags",
             "+faststart",
+            "-threads",
+            "0",
             "-y",
             str(output_path),
         ]
 
+        # Keep a generous safety limit, but do not make the timeout scale
+        # linearly with the requested output duration. The renderer now performs
+        # one source decode and one encode rather than N independent branches.
+        timeout_seconds = max(300, min(900, int(plan.total_duration_seconds * 5)))
         completed = subprocess.run(
             command,
             capture_output=True,
             text=True,
-            timeout=max(180, int(plan.total_duration_seconds * 10)),
+            timeout=timeout_seconds,
             check=False,
         )
         if completed.returncode != 0:
