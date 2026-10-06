@@ -281,7 +281,7 @@ YouTube publishing is not required for this milestone.
 
 ## 8. Current implementation status
 
-**Foundation and metadata/provider implementation are in progress; episode analysis has now started.**
+**Foundation, metadata/provider boundaries, and the first four analysis checkpoints are implemented.**
 
 Completed in the current implementation slice:
 - Python package;
@@ -309,5 +309,6 @@ Completed in the current implementation slice:
 - episode inspection tests.
 - PySceneDetect scene indexing with representative-frame extraction and fingerprint validation.
 - embedded subtitle transcript extraction with scene alignment and input fingerprint validation.
+- deterministic extractive story evidence with scene-linked events and persistent story checkpoints.
 
-Next implementation slice: **story understanding from transcript + scene evidence**.
+Next implementation slice: **LLM-backed story understanding from transcript + scene evidence**.
