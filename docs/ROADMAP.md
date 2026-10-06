@@ -9,14 +9,17 @@
 - Discovery/release-state model.
 - Scheduler unit tests.
 
-## Next — first usable episode
+## Now — first usable episode
 - Local/manual episode input.
 - FFprobe inspection.
 - Scene detection and frame index.
 - Subtitle/transcript extraction.
-- Story representation.
-- Original explanation script.
+- Gemini-backed semantic story representation with extractive fallback.
+- Original English/Hinglish narration script with checkpoint validation.
+
+## Next — audio and editing
 - Local/free TTS.
+- Measured narration timing.
 - Scene matching.
 - FFmpeg render and validation.
 
