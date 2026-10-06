@@ -153,16 +153,15 @@ class SubtitleTranscriptExtractor:
             segments=aligned,
         )
 
-    @staticmethod
     def _select_subtitle_stream(
+        self,
         manifest: EpisodeAnalysisManifest,
-        preferred_languages: tuple[str, ...] | None = None,
     ):
         streams = [stream for stream in manifest.streams if stream.codec_type == "subtitle"]
         if not streams:
             return None
 
-        preferred = preferred_languages or ()
+        preferred = self.preferred_languages
         for wanted in preferred:
             for stream in streams:
                 if (stream.language or "").lower() == wanted:
@@ -284,6 +283,15 @@ class SubtitleTranscriptExtractor:
             raise TranscriptError(f"transcript input does not exist: {input_path}")
         if Path(episode_manifest.input_path).expanduser().resolve() != input_path:
             raise TranscriptError("episode analysis manifest belongs to a different input file")
+        if episode_manifest.input_sha256:
+            from hashlib import sha256
+
+            digest = sha256()
+            with input_path.open("rb") as handle:
+                while chunk := handle.read(1024 * 1024):
+                    digest.update(chunk)
+            if digest.hexdigest() != episode_manifest.input_sha256:
+                raise TranscriptError("episode input fingerprint does not match the analysis manifest")
         if Path(scene_manifest.input_path).expanduser().resolve() != input_path:
             raise TranscriptError("scene manifest belongs to a different input file")
         if (
