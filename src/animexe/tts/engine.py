@@ -8,7 +8,10 @@ import os
 import re
 import shutil
 import subprocess
+import time
 import wave
+
+import requests
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -236,7 +239,7 @@ class GeminiTTSSynthesizer:
         source_script: str = "script.json",
     ) -> TTSManifest:
         output_dir.mkdir(parents=True, exist_ok=True)
-        client = self._client_or_create()
+        client = self._client if self._client is not None else None
 
         items: list[tuple[str, str, tuple[str, ...]]] = [
             ("hook", script.hook, script.hook_scene_ids)
@@ -251,28 +254,31 @@ class GeminiTTSSynthesizer:
         for index, (segment_id, text_value, scene_ids) in enumerate(items, start=1):
             audio_path = output_dir / f"{index:04d}_{_safe_name(segment_id)}.wav"
             try:
-                response = client.models.generate_content(
-                    model=self.model,
-                    contents=[{
-                        "role": "user",
-                        "parts": [{
-                            "text": text_value,
-                            "speech_metadata": {"style": self.style},
+                if client is not None:
+                    response = client.models.generate_content(
+                        model=self.model,
+                        contents=[{
+                            "role": "user",
+                            "parts": [{
+                                "text": text_value,
+                                "speech_metadata": {"style": self.style},
+                            }],
                         }],
-                    }],
-                    config={
-                        "response_modalities": ["AUDIO"],
-                        "speech_config": {
-                            "voice_config": {"voice": self.voice},
+                        config={
+                            "response_modalities": ["AUDIO"],
+                            "speech_config": {
+                                "voice_config": {"voice": self.voice},
+                            },
                         },
-                    },
-                )
+                    )
+                    audio_data = _extract_gemini_audio(response)
+                else:
+                    audio_data = self._rest_generate_audio(text_value)
             except Exception as exc:
                 raise TTSError(
                     f"Gemini TTS request failed for {segment_id}: {exc}"
                 ) from exc
 
-            audio_data = _extract_gemini_audio(response)
             if not audio_data:
                 raise TTSError(f"Gemini TTS returned no audio for {segment_id}")
             try:
@@ -307,6 +313,80 @@ class GeminiTTSSynthesizer:
             total_duration_seconds=round(total, 3),
             voice=self.voice,
         )
+
+    def _rest_generate_audio(self, text_value: str) -> bytes:
+        api_key = os.environ.get(self.api_key_env, "").strip()
+        if not api_key:
+            raise TTSError(
+                f"Gemini TTS API key is missing; set {self.api_key_env} in the environment"
+            )
+        candidates: list[str] = []
+        configured = os.environ.get("GEMINI_TTS_MODEL", "").strip()
+        fallback_env = os.environ.get("GEMINI_TTS_FALLBACK_MODELS", "").strip()
+        for candidate in [self.model, configured, *fallback_env.split(","),
+                          "gemini-3.8-flash-lite-tts"]:
+            candidate = candidate.strip()
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+
+        payload = {
+            "contents": [{
+                "role": "user",
+                "parts": [{
+                    "text": text_value,
+                    "speech_metadata": {"style": self.style},
+                }],
+            }],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "responseFormat": {
+                    "audio": {
+                        "mimeType": "AUDIO_WAV",
+                        "sampleRate": 24000,
+                    }
+                },
+                "speechConfig": {
+                    "voiceConfig": {"voice": self.voice},
+                },
+            },
+        }
+
+        last_error = "unknown error"
+        for candidate_model in candidates:
+            url = (
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{candidate_model}:generateContent"
+            )
+            for attempt in range(3):
+                try:
+                    response = requests.post(
+                        url,
+                        headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+                        json=payload,
+                        timeout=120,
+                    )
+                    if response.status_code in {429, 500, 502, 503, 504}:
+                        last_error = f"HTTP {response.status_code}"
+                        if attempt < 2:
+                            time.sleep(2 ** attempt)
+                            continue
+                        break
+                    response.raise_for_status()
+                    data = response.json()
+                    encoded = data["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+                    audio = base64.b64decode(encoded)
+                    if not audio:
+                        raise TTSError(f"Gemini returned empty audio for {candidate_model}")
+                    return audio
+                except (requests.RequestException, KeyError, IndexError, TypeError, ValueError, binascii.Error) as exc:
+                    last_error = str(exc)
+                    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+                        last_error = f"HTTP {exc.response.status_code}: {exc.response.text[:1000]}"
+                    if attempt < 2:
+                        time.sleep(2 ** attempt)
+                        continue
+                    break
+        raise TTSError("Gemini TTS REST generation failed after retries: " + last_error)
 
     def _client_or_create(self):
         if self._client is not None:
