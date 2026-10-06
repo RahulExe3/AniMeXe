@@ -70,12 +70,12 @@ SCRIPT_RESPONSE_SCHEMA: dict[str, Any] = {
 }
 
 
-_FORMAT_ARTIFACTS = re.compile(
-    r"(?:^|\s)(?:---+|___+|\*\*\*+)(?:\s|$)",
-    re.MULTILINE,
-)
+_FORMAT_ARTIFACTS = re.compile(r"(?:^|\s)(?:---+|___+|\*\*\*+)(?:\s|$)", re.MULTILINE)
 _MARKDOWN_HEADING = re.compile(r"^\s{0,3}#{1,6}\s+", re.MULTILINE)
-_STAGE_DIRECTION = re.compile(r"\[[^\]]+\]|\([^)]*\b(?:pause|laughs?|music|sfx)\b[^)]*\)", re.I)
+_STAGE_DIRECTION = re.compile(
+    r"\[[^\]]+\]|\([^)]*\b(?:pause|laughs?|music|sfx)\b[^)]*\)",
+    re.I,
+)
 
 
 @dataclass(frozen=True)
@@ -213,7 +213,6 @@ class GeminiNarrationScriptGenerator:
             raise ValueError("target_duration_seconds must be within the duration bounds")
         if words_per_minute < 60 or words_per_minute > 220:
             raise ValueError("words_per_minute must be between 60 and 220")
-
         self.model = model
         self.api_key_env = api_key_env
         self.temperature = temperature
@@ -238,13 +237,11 @@ class GeminiNarrationScriptGenerator:
         script = script.strip().lower()
         if language not in self.VALID_LANGUAGES:
             raise NarrationScriptError(
-                f"unsupported narration language: {language}; "
-                f"choose from {sorted(self.VALID_LANGUAGES)}"
+                f"unsupported narration language: {language}; choose from {sorted(self.VALID_LANGUAGES)}"
             )
         if script not in self.VALID_SCRIPTS:
             raise NarrationScriptError(
-                f"unsupported narration script: {script}; "
-                f"choose from {sorted(self.VALID_SCRIPTS)}"
+                f"unsupported narration script: {script}; choose from {sorted(self.VALID_SCRIPTS)}"
             )
         if language == "english" and script != "latin":
             raise NarrationScriptError("English narration must use script=latin")
@@ -304,20 +301,17 @@ class GeminiNarrationScriptGenerator:
     def _client_or_create(self) -> _ResponseClient:
         if self._client is not None:
             return self._client
-
         api_key = os.environ.get(self.api_key_env, "").strip()
         if not api_key:
             raise NarrationScriptError(
                 f"Gemini API key is missing; set {self.api_key_env} in the environment"
             )
-
         try:
             from google import genai
         except ImportError as exc:
             raise NarrationScriptError(
                 "google-genai is not installed; install the project dependencies first"
             ) from exc
-
         self._client = genai.Client(api_key=api_key)
         return self._client
 
@@ -328,7 +322,6 @@ class GeminiNarrationScriptGenerator:
             raise NarrationScriptError(
                 "google-genai is not installed; install the project dependencies first"
             ) from exc
-
         return types.GenerateContentConfig(
             temperature=self.temperature,
             max_output_tokens=self.max_output_tokens,
@@ -376,17 +369,18 @@ class GeminiNarrationScriptGenerator:
             }
             for event in story.events
         ]
-
-        language_instruction = (
-            "Write natural spoken English in Latin script. "
-            "Use simple, conversational phrasing suitable for a YouTube narrator."
-            if language == "english"
-            else
-            "Write natural spoken Hinglish in Roman script. "
-            "Use Hindi as the conversational base with English terms only where a speaker would "
-            "naturally use them. Do not force an English word into every sentence and do not "
-            "translate Hindi mechanically."
-        )
+        if language == "english":
+            language_instruction = (
+                "Write natural spoken English in Latin script. "
+                "Use simple, conversational phrasing suitable for a YouTube narrator."
+            )
+        else:
+            language_instruction = (
+                "Write natural spoken Hinglish in Roman script. "
+                "Use Hindi as the conversational base with English terms only where a speaker "
+                "would naturally use them. Do not force English words into every sentence and "
+                "do not translate Hindi mechanically."
+            )
 
         return (
             "You are AniMeXe's original narration-script writer. "
@@ -395,13 +389,13 @@ class GeminiNarrationScriptGenerator:
             "Preserve event order and only reference real scene IDs and story event IDs. "
             "Explain what happens rather than reading or paraphrasing subtitles line by line. "
             "Do not invent events, motives, relationships, characters, locations, or outcomes. "
-            "Do not copy dialogue or subtitle sentences. Prefer concise paraphrase and explanation. "
-            "The output is for voice narration, not an article: no markdown, headings, bullet points, "
-            "stage directions, emoji, decorative separators, repeated punctuation, or AI-style filler. "
-            "Do not use em-dash/underscore separators such as '---' or '___'. "
+            "Do not copy dialogue or subtitle sentences. Prefer original explanation and paraphrase. "
+            "This is voice narration, not an article: no markdown, headings, bullets, stage directions, "
+            "emoji, decorative separators, repeated punctuation, or AI-style filler. "
+            "Never use em-dash or underscore separator patterns such as '---' or '___'. "
             f"{language_instruction} "
             f"Use a {style} tone with a strong opening hook and a clear ending. "
-            f"Target about {target_words} words; stay between {min_words} and {max_words} words. "
+            f"Target about {target_words} words and stay between {min_words} and {max_words} words. "
             "Keep the main explanation chronological. "
             "Each body segment should map to the smallest useful set of story events and scenes. "
             "start_seconds/end_seconds are approximate narration-timeline anchors only; later TTS "
@@ -416,9 +410,8 @@ class GeminiNarrationScriptGenerator:
             f"EVENTS:\n{json.dumps(event_rows, ensure_ascii=False)}"
         )
 
-    @classmethod
     def _manifest_from_payload(
-        cls,
+        self,
         payload: Any,
         story: EpisodeStoryManifest,
         *,
@@ -429,9 +422,7 @@ class GeminiNarrationScriptGenerator:
         source_story: str,
     ) -> NarrationScriptManifest:
         if not isinstance(payload, dict):
-            raise NarrationScriptError(
-                "Gemini narration response must be a JSON object"
-            )
+            raise NarrationScriptError("Gemini narration response must be a JSON object")
 
         required = (
             "hook",
@@ -448,23 +439,23 @@ class GeminiNarrationScriptGenerator:
                 "Gemini narration response is missing fields: " + ", ".join(missing)
             )
 
-        scene_ids = {scene_id for event in story.events for scene_id in event.scene_ids}
-        if not scene_ids:
+        valid_scene_ids = {scene_id for event in story.events for scene_id in event.scene_ids}
+        valid_event_ids = {event.event_id for event in story.events}
+        if not valid_scene_ids:
             raise NarrationScriptError("story manifest contains no usable scene IDs")
-        event_ids = {event.event_id for event in story.events}
 
         hook = str(payload["hook"]).strip()
         ending = str(payload["ending"]).strip()
-        if not hook:
-            raise NarrationScriptError("narration hook cannot be empty")
-        if not ending:
-            raise NarrationScriptError("narration ending cannot be empty")
+        if not hook or not ending:
+            raise NarrationScriptError("narration hook and ending are required")
+        self._validate_text_quality(hook, "hook")
+        self._validate_text_quality(ending, "ending")
 
-        hook_scene_ids = cls._validate_scene_ids(
-            payload["hook_scene_ids"], scene_ids, "hook"
+        hook_scene_ids = self._validate_scene_ids(
+            payload["hook_scene_ids"], valid_scene_ids, "hook"
         )
-        ending_scene_ids = cls._validate_scene_ids(
-            payload["ending_scene_ids"], scene_ids, "ending"
+        ending_scene_ids = self._validate_scene_ids(
+            payload["ending_scene_ids"], valid_scene_ids, "ending"
         )
 
         raw_segments = payload["segments"]
@@ -472,34 +463,29 @@ class GeminiNarrationScriptGenerator:
             raise NarrationScriptError("narration must contain at least one segment")
 
         segments: list[NarrationSegment] = []
-        seen_segment_ids: set[str] = set()
+        seen_ids: set[str] = set()
         previous_end = -1.0
-        all_script_text = [hook]
+        text_parts = [hook]
 
         for item in raw_segments:
             if not isinstance(item, dict):
                 raise NarrationScriptError("narration segment entries must be objects")
             segment_id = str(item.get("segment_id", "")).strip()
-            if not segment_id:
-                raise NarrationScriptError("narration segment is missing segment_id")
-            if segment_id in seen_segment_ids:
+            text_value = str(item.get("text", "")).strip()
+            if not segment_id or not text_value:
+                raise NarrationScriptError("narration segments require IDs and text")
+            if segment_id in seen_ids:
                 raise NarrationScriptError(
                     f"duplicate narration segment_id: {segment_id}"
                 )
-            seen_segment_ids.add(segment_id)
+            seen_ids.add(segment_id)
 
-            text_value = str(item.get("text", "")).strip()
-            if not text_value:
-                raise NarrationScriptError(
-                    f"narration segment {segment_id} has empty text"
-                )
-            cls._validate_text_quality(text_value, segment_id)
-
-            scene_values = cls._validate_scene_ids(
-                item.get("scene_ids", []), scene_ids, segment_id
+            self._validate_text_quality(text_value, segment_id)
+            scene_values = self._validate_scene_ids(
+                item.get("scene_ids", []), valid_scene_ids, segment_id
             )
-            event_values = cls._validate_event_ids(
-                item.get("story_event_ids", []), event_ids, segment_id
+            event_values = self._validate_event_ids(
+                item.get("story_event_ids", []), valid_event_ids, segment_id
             )
             if not event_values:
                 raise NarrationScriptError(
@@ -513,14 +499,9 @@ class GeminiNarrationScriptGenerator:
                 raise NarrationScriptError(
                     f"narration segment {segment_id} has invalid timing"
                 ) from exc
-
-            if start < 0 or end <= start:
+            if start < 0 or end <= start or start < previous_end:
                 raise NarrationScriptError(
-                    f"narration segment {segment_id} has invalid start/end timing"
-                )
-            if start < previous_end:
-                raise NarrationScriptError(
-                    f"narration segment {segment_id} breaks narration chronology"
+                    f"narration segment {segment_id} has non-chronological timing"
                 )
             previous_end = end
 
@@ -536,172 +517,48 @@ class GeminiNarrationScriptGenerator:
                     end_seconds=end,
                 )
             )
-            all_script_text.append(text_value)
+            text_parts.append(text_value)
 
-        all_script_text.append(ending)
-        combined = " ".join(all_script_text)
-        cls._validate_text_quality(combined, "script")
-
-        actual_word_count = cls._word_count(combined)
-        min_words = round(
-            story_target_duration := 0.0
-        )
-        _ = min_words
-        try:
-            reported_word_count = int(payload["word_count"])
-        except (TypeError, ValueError) as exc:
-            raise NarrationScriptError("narration word_count must be an integer") from exc
-
-        if abs(reported_word_count - actual_word_count) > max(12, round(actual_word_count * 0.08)):
-            raise NarrationScriptError(
-                "narration word_count disagrees materially with generated text"
-            )
-
-        min_words = round(
-            cls._duration_to_words(cls._min_duration_for_validation, cls._wpm_for_validation)
-        )
-        _ = min_words
-        # Duration and word limits are checked with the generator's configured values below.
-        raise_placeholder = False
-        if raise_placeholder:
-            raise AssertionError
+        text_parts.append(ending)
+        combined_text = " ".join(text_parts)
+        self._validate_text_quality(combined_text, "script")
 
         if transcript is not None:
-            cls._validate_copy_risk(combined, transcript)
+            self._validate_copy_risk(combined_text, transcript)
 
-        # These values are replaced by the concrete generator configuration by _build_manifest.
-        # Calling this classmethod directly is intentionally not part of the public API.
-        raise NarrationScriptError(
-            "internal error: narration payload validation requires generator configuration"
-        )
-
-    @staticmethod
-    def _duration_to_words(seconds: float, words_per_minute: int) -> int:
-        return round(seconds / 60.0 * words_per_minute)
-
-    # Placeholders replaced by the instance-aware wrapper below.
-    _min_duration_for_validation = 105.0
-    _wpm_for_validation = 145
-
-    @classmethod
-    def _build_manifest(
-        cls,
-        payload: Any,
-        story: EpisodeStoryManifest,
-        *,
-        transcript: TranscriptAnalysisManifest | None,
-        language: str,
-        script: str,
-        style: str,
-        source_story: str,
-        target_duration_seconds: float,
-        min_duration_seconds: float,
-        max_duration_seconds: float,
-        words_per_minute: int,
-        model: str,
-    ) -> NarrationScriptManifest:
-        # Validate and normalize through an instance-free path so tests can exercise the contract.
-        if not isinstance(payload, dict):
-            raise NarrationScriptError("Gemini narration response must be a JSON object")
-
-        scene_ids = {scene_id for event in story.events for scene_id in event.scene_ids}
-        event_ids = {event.event_id for event in story.events}
-        hook = str(payload.get("hook", "")).strip()
-        ending = str(payload.get("ending", "")).strip()
-        if not hook or not ending:
-            raise NarrationScriptError("narration hook and ending are required")
-
-        hook_scene_ids = cls._validate_scene_ids(
-            payload.get("hook_scene_ids", []), scene_ids, "hook"
-        )
-        ending_scene_ids = cls._validate_scene_ids(
-            payload.get("ending_scene_ids", []), scene_ids, "ending"
-        )
-        raw_segments = payload.get("segments")
-        if not isinstance(raw_segments, list) or not raw_segments:
-            raise NarrationScriptError("narration must contain at least one segment")
-
-        segments: list[NarrationSegment] = []
-        seen: set[str] = set()
-        previous_end = -1.0
-        texts = [hook]
-
-        for item in raw_segments:
-            if not isinstance(item, dict):
-                raise NarrationScriptError("narration segment entries must be objects")
-            segment_id = str(item.get("segment_id", "")).strip()
-            text_value = str(item.get("text", "")).strip()
-            if not segment_id or not text_value:
-                raise NarrationScriptError("narration segments require IDs and text")
-            if segment_id in seen:
-                raise NarrationScriptError(f"duplicate narration segment_id: {segment_id}")
-            seen.add(segment_id)
-            cls._validate_text_quality(text_value, segment_id)
-            scene_values = cls._validate_scene_ids(item.get("scene_ids", []), scene_ids, segment_id)
-            event_values = cls._validate_event_ids(
-                item.get("story_event_ids", []), event_ids, segment_id
-            )
-            if not event_values:
-                raise NarrationScriptError(
-                    f"narration segment {segment_id} must reference at least one story event"
-                )
-            try:
-                start = float(item["start_seconds"])
-                end = float(item["end_seconds"])
-            except (KeyError, TypeError, ValueError) as exc:
-                raise NarrationScriptError(
-                    f"narration segment {segment_id} has invalid timing"
-                ) from exc
-            if start < 0 or end <= start or start < previous_end:
-                raise NarrationScriptError(
-                    f"narration segment {segment_id} has non-chronological timing"
-                )
-            previous_end = end
-            segments.append(
-                NarrationSegment(
-                    segment_id=segment_id,
-                    text=text_value,
-                    scene_ids=scene_values,
-                    story_event_ids=event_values,
-                    purpose=str(item.get("purpose", "explanation")).strip() or "explanation",
-                    start_seconds=start,
-                    end_seconds=end,
-                )
-            )
-            texts.append(text_value)
-
-        texts.append(ending)
-        combined = " ".join(texts)
-        cls._validate_text_quality(combined, "script")
-        if transcript is not None:
-            cls._validate_copy_risk(combined, transcript)
-
-        actual_word_count = cls._word_count(combined)
-        min_words = round(min_duration_seconds / 60.0 * words_per_minute)
-        max_words = round(max_duration_seconds / 60.0 * words_per_minute)
+        actual_word_count = self._word_count(combined_text)
+        min_words = round(self.min_duration_seconds / 60.0 * self.words_per_minute)
+        max_words = round(self.max_duration_seconds / 60.0 * self.words_per_minute)
         if not min_words <= actual_word_count <= max_words:
             raise NarrationScriptError(
-                f"narration word count {actual_word_count} is outside the "
-                f"configured range {min_words}-{max_words}"
+                f"narration word count {actual_word_count} is outside the configured range "
+                f"{min_words}-{max_words}"
             )
 
         try:
             reported_word_count = int(payload["word_count"])
             reported_duration = float(payload["estimated_duration_seconds"])
-        except (KeyError, TypeError, ValueError) as exc:
+        except (TypeError, ValueError, KeyError) as exc:
             raise NarrationScriptError(
                 "narration word_count and estimated_duration_seconds must be numeric"
             ) from exc
-        if abs(reported_word_count - actual_word_count) > max(12, round(actual_word_count * 0.08)):
-            raise NarrationScriptError("narration word_count disagrees materially with generated text")
 
-        estimated_duration = actual_word_count / words_per_minute * 60.0
-        if not min_duration_seconds <= estimated_duration <= max_duration_seconds:
+        if abs(reported_word_count - actual_word_count) > max(
+            12, round(actual_word_count * 0.08)
+        ):
+            raise NarrationScriptError(
+                "narration word_count disagrees materially with generated text"
+            )
+
+        estimated_duration = actual_word_count / self.words_per_minute * 60.0
+        if not self.min_duration_seconds <= estimated_duration <= self.max_duration_seconds:
             raise NarrationScriptError(
                 f"estimated narration duration {estimated_duration:.1f}s is outside "
-                f"{min_duration_seconds:.1f}-{max_duration_seconds:.1f}s"
+                f"{self.min_duration_seconds:.1f}-{self.max_duration_seconds:.1f}s"
             )
-        if abs(reported_duration - estimated_duration) > max(18.0, estimated_duration * 0.20):
+        if abs(reported_duration - estimated_duration) > max(
+            18.0, estimated_duration * 0.20
+        ):
             raise NarrationScriptError(
                 "Gemini estimated_duration_seconds disagrees materially with generated text"
             )
@@ -715,10 +572,10 @@ class GeminiNarrationScriptGenerator:
             language=language,
             script=script,
             style=style,
-            target_duration_seconds=target_duration_seconds,
-            min_duration_seconds=min_duration_seconds,
-            max_duration_seconds=max_duration_seconds,
-            words_per_minute=words_per_minute,
+            target_duration_seconds=self.target_duration_seconds,
+            min_duration_seconds=self.min_duration_seconds,
+            max_duration_seconds=self.max_duration_seconds,
+            words_per_minute=self.words_per_minute,
             hook=hook,
             hook_scene_ids=hook_scene_ids,
             segments=tuple(segments),
@@ -726,16 +583,26 @@ class GeminiNarrationScriptGenerator:
             ending_scene_ids=ending_scene_ids,
             word_count=actual_word_count,
             estimated_duration_seconds=round(estimated_duration, 3),
-            model=model,
+            model=self.model,
         )
 
     @staticmethod
-    def _validate_scene_ids(value: Any, valid_ids: set[str], label: str) -> tuple[str, ...]:
-        if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
-            raise NarrationScriptError(f"narration {label} scene_ids must be a list of strings")
+    def _validate_scene_ids(
+        value: Any,
+        valid_ids: set[str],
+        label: str,
+    ) -> tuple[str, ...]:
+        if not isinstance(value, list) or any(
+            not isinstance(item, str) for item in value
+        ):
+            raise NarrationScriptError(
+                f"narration {label} scene_ids must be a list of strings"
+            )
         values = tuple(item.strip() for item in value if item.strip())
         if not values:
-            raise NarrationScriptError(f"narration {label} must reference at least one scene")
+            raise NarrationScriptError(
+                f"narration {label} must reference at least one scene"
+            )
         unknown = [item for item in values if item not in valid_ids]
         if unknown:
             raise NarrationScriptError(
@@ -749,7 +616,9 @@ class GeminiNarrationScriptGenerator:
         valid_ids: set[str],
         label: str,
     ) -> tuple[str, ...]:
-        if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        if not isinstance(value, list) or any(
+            not isinstance(item, str) for item in value
+        ):
             raise NarrationScriptError(
                 f"narration segment {label} story_event_ids must be a list of strings"
             )
@@ -767,9 +636,9 @@ class GeminiNarrationScriptGenerator:
             raise NarrationScriptError(
                 f"narration {label} contains markdown/decorative formatting"
             )
-        if _STAGE_DIRECTION.search(value):
+        if _STAGE_DIRECTION.search(value) or "—" in value:
             raise NarrationScriptError(
-                f"narration {label} contains stage directions"
+                f"narration {label} contains stage directions or decorative em-dash formatting"
             )
         if re.search(r"([!?.,])\1{3,}", value):
             raise NarrationScriptError(
@@ -787,17 +656,17 @@ class GeminiNarrationScriptGenerator:
         transcript: TranscriptAnalysisManifest,
     ) -> None:
         script_words = cls._normalized_words(script_text)
-        if len(script_words) < 9:
-            return
         transcript_words = cls._normalized_words(
             " ".join(segment.text for segment in transcript.segments)
         )
+        if len(script_words) < 9 or len(transcript_words) < 9:
+            return
         script_ngrams = {
-            tuple(script_words[index : index + 9])
+            tuple(script_words[index:index + 9])
             for index in range(len(script_words) - 8)
         }
         transcript_ngrams = {
-            tuple(transcript_words[index : index + 9])
+            tuple(transcript_words[index:index + 9])
             for index in range(len(transcript_words) - 8)
         }
         if script_ngrams & transcript_ngrams:
