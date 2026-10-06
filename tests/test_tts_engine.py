@@ -1,7 +1,9 @@
+from io import BytesIO
 from pathlib import Path
+import wave
 
 from animexe.narration import NarrationScriptManifest, NarrationSegment
-from animexe.tts import SyntheticTTSSynthesizer, TTSManifest
+from animexe.tts import GeminiTTSSynthesizer, SyntheticTTSSynthesizer, TTSManifest
 
 
 def _script() -> NarrationScriptManifest:
@@ -64,3 +66,51 @@ def test_synthetic_tts_writes_real_audio(tmp_path: Path) -> None:
         assert segment.duration_seconds > 0
         assert segment.sample_rate == 24000
         assert segment.channels == 1
+
+
+
+def _wav_bytes() -> bytes:
+    buffer = BytesIO()
+    with wave.open(buffer, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(24000)
+        wav.writeframes((b"\x00\x00") * 2400)
+    return buffer.getvalue()
+
+
+class _FakeGeminiClient:
+    def __init__(self) -> None:
+        self.models = self
+        self.calls = []
+
+    def generate_content(self, **kwargs):
+        self.calls.append(kwargs)
+
+        class Part:
+            inline_data = type("InlineData", (), {"data": _wav_bytes()})()
+
+        class Content:
+            parts = [Part()]
+
+        class Candidate:
+            content = Content()
+
+        return type("Response", (), {"candidates": [Candidate()]})()
+
+
+def test_gemini_tts_writes_measured_wav_audio(tmp_path: Path) -> None:
+    client = _FakeGeminiClient()
+    manifest = GeminiTTSSynthesizer(
+        client=client,
+        voice="Kore",
+    ).synthesize(_script(), output_dir=tmp_path)
+
+    assert manifest.provider == "gemini"
+    assert manifest.voice == "Kore"
+    assert len(manifest.segments) == 4
+    assert all(segment.sample_rate == 24000 for segment in manifest.segments)
+    assert all(segment.channels == 1 for segment in manifest.segments)
+    assert all((tmp_path / segment.audio).exists() for segment in manifest.segments)
+    assert client.calls
+    assert client.calls[0]["config"]["response_modalities"] == ["AUDIO"]
