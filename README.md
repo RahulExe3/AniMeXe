@@ -5,7 +5,7 @@
 **Status:** Foundation implementation in progress  
 **Repository:** Private  
 **Brand:** AniMeXe  
-**Current focus:** Build the core automation first. The runnable foundation now includes metadata/provider boundaries plus `inspected`, `scenes`, `transcript`, Gemini semantic `story`, original bilingual `script`, measured `TTS`, `matching`, `timeline`, and `render` checkpoints. YouTube publishing is intentionally out of scope for the initial implementation.
+**Current focus:** Build the core automation first. The runnable foundation now includes metadata/provider boundaries plus `inspected`, `scenes`, `transcript`, Gemini semantic `story`, semantic `edit_plan`, cut-aware bilingual `script`, measured `TTS`, constrained `matching`, `timeline`, and `render` checkpoints. YouTube publishing is intentionally out of scope for the initial implementation.
 
 ## 1. Vision
 
@@ -13,7 +13,7 @@ AniMeXe is a free-first automation pipeline for producing narrated anime episode
 
 Target format:
 
-**One episode → understand the episode → write an original explanation → generate natural voiceover → select relevant visual clips → mute source audio → add narration/BGM/SFX → subtitles → final rendered video.**
+**One real episode → understand the actual media → select the important visual cut → write narration for that exact cut → generate natural voiceover → constrain scene timing to the same cut → mute source audio → add narration/BGM/SFX → subtitles → final rendered video.**
 
 The system is modular so anime metadata, episode availability, media input, narration, TTS, editing, and publishing remain independent components.
 
@@ -250,13 +250,15 @@ Episode inspection
       ↓
 Story understanding
       ↓
-Explanation script
+Visual edit plan
+      ↓
+Narration for the exact visual cut
       ↓
 Natural TTS
       ↓
-Narration timing
+Measured narration timing
       ↓
-Scene ↔ narration matching
+Scene ↔ narration matching inside the same cut
       ↓
 FFmpeg renderer
       ↓
@@ -367,7 +369,7 @@ python -m animexe provider status
 python -m animexe provider check anilist:21 --episode-number 1 --language sub
 ```
 
-For hosted smoke testing, `.github/workflows/provider-smoke.yml` is manual-only. Set provider API endpoints as GitHub repository Variables. Stream extraction/proxy/decryption behavior from third-party aggregator projects is intentionally not embedded in AniMeXe; media enters processing through an authorized/local source boundary.
+Provider availability remains part of the main production input boundary. There is no separate provider-smoke workflow in the current workflow set; provider checks are exercised through the main worker/smoke paths. Stream extraction/proxy/decryption behavior from third-party aggregator projects is intentionally not embedded in AniMeXe; media enters processing through an authorized/local source boundary.
 
 ## One-command production run
 
@@ -386,7 +388,7 @@ python -m animexe episode run /path/to/episode.mkv \
   --season 1
 ```
 
-The command runs inspection → scenes → transcript → Gemini story → Gemini narration script → configured TTS → matching → timeline → FFmpeg render. Existing checkpoints are fingerprint-checked and reused, and an existing MP4 is re-probed before it is trusted. BGM is automatically selected from the configured local music directory when enabled.
+The command runs inspection → scenes → transcript → Gemini story → semantic edit plan → narration for that selected cut → configured TTS → matching constrained to the edit plan → timeline → FFmpeg render. Existing checkpoints are fingerprint-checked and reused, and an existing MP4 is re-probed before it is trusted. BGM is automatically selected from the configured local music directory when enabled.
 
 ## 10. Episode analysis
 
@@ -1046,3 +1048,56 @@ python -m animexe episode transcript /path/to/episode.mkv
 ```
 
 See `docs/ANALYSIS.md` for the analysis contracts.
+
+
+## Visual edit planning
+
+AniMeXe now creates an explicit visual-selection checkpoint between story understanding and narration:
+
+\`\`\`text
+episode
+  ↓
+scenes + transcript
+  ↓
+Gemini story
+  ↓
+edit_plan.json
+  ↓
+narration for those exact scenes
+\`\`\`
+
+The planner chooses important, chronological scenes from the real episode and stores the exact source windows in:
+
+\`\`\`text
+workspace/analysis/<episode-name>/edit_plan.json
+\`\`\`
+
+This prevents the narration from describing events that never appear in the final short.
+
+### Narration-free visual preview
+
+To inspect the selected footage before generating voiceover:
+
+\`\`\`bash
+python -m animexe episode visual-cut /path/to/episode.mkv
+\`\`\`
+
+The generated preview contains **video only**: no original audio, narration, TTS, music, SFX, or subtitles.
+
+GitHub Actions provides a manual preview workflow:
+
+\`\`\`text
+.github/workflows/episode-visual-cut.yml
+\`\`\`
+
+Its artifact is named:
+
+\`\`\`text
+animexe-episode-visual-cut
+\`\`\`
+
+Synthetic mode is the default CI test path. Workspace mode requires the episode file to already be provisioned on the runner.
+
+A missing episode is a hard failure. AniMeXe never fabricates narration from metadata when the actual source media is unavailable.
+
+See \`docs/EDITING.md\` for the complete edit-plan, visual-cut, narration boundary, checkpoint, and workflow contract.
