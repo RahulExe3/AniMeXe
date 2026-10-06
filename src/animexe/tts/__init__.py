@@ -2,6 +2,7 @@
 
 from .engine import (
     CommandTTSSynthesizer,
+    GeminiTTSSynthesizer,
     SyntheticTTSSynthesizer,
     TTSError,
     TTSManifest,
@@ -10,6 +11,7 @@ from .engine import (
 
 __all__ = [
     "CommandTTSSynthesizer",
+    "GeminiTTSSynthesizer",
     "SyntheticTTSSynthesizer",
     "TTSError",
     "TTSManifest",
