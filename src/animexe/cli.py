@@ -171,6 +171,11 @@ def _build_parser() -> argparse.ArgumentParser:
     episode_visual_cut.add_argument("--min-duration-seconds", type=float, default=None)
     episode_visual_cut.add_argument("--max-duration-seconds", type=float, default=None)
     episode_visual_cut.add_argument("--max-clip-duration", type=float, default=None)
+    episode_visual_cut.add_argument(
+        "--visual-only",
+        action="store_true",
+        help="build the cut directly from detected scenes without a story/Gemini manifest",
+    )
 
     episode_script = episode_sub.add_parser(
         "script",
@@ -746,10 +751,16 @@ def main() -> None:
             )
 
             try:
-                story_manifest = EpisodeStoryManifest.read(story_path)
                 scene_manifest = SceneAnalysisManifest.read(scene_path)
+                story_manifest = (
+                    EpisodeStoryManifest.read(story_path)
+                    if not args.visual_only
+                    else None
+                )
             except (OSError, ValueError, TypeError, KeyError) as exc:
-                parser.error(f"could not read story/scene manifests: {exc}")
+                parser.error(
+                    f"could not read {'scene' if args.visual_only else 'story/scene'} manifests: {exc}"
+                )
 
             config_path = paths.config / "config.yml"
             if not config_path.exists():
@@ -782,20 +793,30 @@ def main() -> None:
                     plan = EditPlanManifest.read(plan_path)
                     if plan.input_path != str(args.input_path.expanduser().resolve()):
                         parser.error("existing edit plan belongs to a different input")
-                    if plan.input_sha256 and story_manifest.input_sha256 and plan.input_sha256 != story_manifest.input_sha256:
-                        parser.error("existing edit plan fingerprint does not match the story")
+                    expected_sha = scene_manifest.input_sha256
+                    if expected_sha and plan.input_sha256 and expected_sha != plan.input_sha256:
+                        parser.error("existing edit plan fingerprint does not match the scenes")
                 else:
-                    plan = EditPlanner(
+                    planner = EditPlanner(
                         target_duration_seconds=target,
                         min_duration_seconds=minimum,
                         max_duration_seconds=maximum,
                         max_clip_duration_seconds=max_clip,
-                    ).plan(
-                        story_manifest,
-                        scene_manifest,
-                        source_story=str(story_path),
-                        source_scenes=str(scene_path),
                     )
+                    if args.visual_only:
+                        plan = planner.plan_visual_only(
+                            scene_manifest,
+                            source_story="visual-only",
+                            source_scenes=str(scene_path),
+                        )
+                    else:
+                        assert story_manifest is not None
+                        plan = planner.plan(
+                            story_manifest,
+                            scene_manifest,
+                            source_story=str(story_path),
+                            source_scenes=str(scene_path),
+                        )
                     plan.write(plan_path)
                 VisualCutRenderer(
                     width=app_config.video.width,
