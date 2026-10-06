@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -12,6 +13,9 @@ from typing import Any, Protocol
 
 from ..analysis.story import EpisodeStoryManifest
 from ..analysis.transcript import TranscriptAnalysisManifest
+
+
+NARRATION_CACHE_VERSION = 1
 
 
 class NarrationScriptError(RuntimeError):
@@ -281,7 +285,17 @@ class GeminiNarrationScriptGenerator:
                 response_text = getattr(response, "text", None)
                 used_model = self.model
             else:
-                response_text, used_model = self._rest_generate(prompt)
+                cached = self._load_cached_response(prompt, story)
+                if cached is not None:
+                    response_text, used_model = cached
+                else:
+                    response_text, used_model = self._rest_generate(prompt)
+                    self._save_cached_response(
+                        prompt,
+                        story=story,
+                        model=used_model,
+                        text=response_text,
+                    )
         except Exception as exc:
             raise NarrationScriptError(
                 f"Gemini narration-script request failed: {exc}"
@@ -332,6 +346,7 @@ class GeminiNarrationScriptGenerator:
         }
 
         last_error = "unknown error"
+        backoff = (5, 15, 45)
         for candidate_model in candidates:
             if candidate_model.startswith("gemini-3"):
                 generation_config["thinkingConfig"] = {
@@ -346,7 +361,7 @@ class GeminiNarrationScriptGenerator:
                 "https://generativelanguage.googleapis.com/v1beta/models/"
                 f"{candidate_model}:generateContent"
             )
-            for attempt in range(3):
+            for attempt in range(len(backoff) + 1):
                 try:
                     response = requests.post(
                         url,
@@ -362,8 +377,8 @@ class GeminiNarrationScriptGenerator:
                     )
                     if response.status_code in {429, 500, 502, 503, 504}:
                         last_error = f"HTTP {response.status_code}"
-                        if attempt < 2:
-                            time.sleep(2 ** attempt)
+                        if attempt < len(backoff):
+                            time.sleep(backoff[attempt])
                             continue
                         break
 
@@ -386,14 +401,73 @@ class GeminiNarrationScriptGenerator:
                             f"HTTP {exc.response.status_code}: "
                             f"{exc.response.text[:1000]}"
                         )
-                    if attempt < 2:
-                        time.sleep(2 ** attempt)
+                    if attempt < len(backoff):
+                        time.sleep(backoff[attempt])
                         continue
                     break
 
         raise NarrationScriptError(
             "Gemini REST generation failed after retries: " + last_error
         )
+
+    def _cache_root(self) -> Path:
+        configured = os.getenv("ANIMEXE_GEMINI_CACHE_DIR", "").strip()
+        if configured:
+            return Path(configured).expanduser() / "narration"
+        return Path.cwd() / "workspace" / "cache" / "gemini" / "narration"
+
+    def _cache_key(self, prompt: str, story: EpisodeStoryManifest, model: str) -> str:
+        payload = {
+            "version": NARRATION_CACHE_VERSION,
+            "model": model,
+            "prompt": prompt,
+            "input_sha256": story.input_sha256,
+            "thinking_level": self.thinking_level,
+            "max_output_tokens": self.max_output_tokens,
+            "temperature": self.temperature,
+        }
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
+
+    def _load_cached_response(
+        self, prompt: str, story: EpisodeStoryManifest
+    ) -> tuple[str, str] | None:
+        root = self._cache_root()
+        candidates = []
+        configured = os.getenv("GEMINI_MODEL", "").strip()
+        for model in (configured, self.model):
+            if model and model not in candidates:
+                candidates.append(model)
+        for model in candidates:
+            path = root / f"{self._cache_key(prompt, story, model)}.json"
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            text = payload.get("text") if isinstance(payload, dict) else None
+            cached_model = payload.get("model") if isinstance(payload, dict) else None
+            if isinstance(text, str) and text.strip() and isinstance(cached_model, str):
+                return text, cached_model
+        return None
+
+    def _save_cached_response(
+        self, prompt: str, *, story: EpisodeStoryManifest, model: str, text: str
+    ) -> None:
+        path = self._cache_root() / f"{self._cache_key(prompt, story, model)}.json"
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(
+                json.dumps(
+                    {"version": NARRATION_CACHE_VERSION, "model": model, "text": text},
+                    ensure_ascii=False,
+                ) + "\n",
+                encoding="utf-8",
+            )
+            tmp.replace(path)
+        except OSError:
+            return
 
     @staticmethod
     def _rest_schema(schema: dict[str, Any]) -> dict[str, Any]:
