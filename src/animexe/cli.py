@@ -509,12 +509,6 @@ def main() -> None:
                         source_transcript=str(transcript_path),
                         source_scenes=str(scene_path),
                     )
-                    story_manifest = EpisodeStoryManifest(
-                        **(
-                            story_manifest.to_dict()
-                            | {"model": app_config.llm.model}
-                        )
-                    )
                 else:
                     story_manifest = ExtractiveStoryAnalyzer().analyze(
                         transcript_manifest,
