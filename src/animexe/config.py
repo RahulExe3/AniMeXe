@@ -59,6 +59,7 @@ class LLMConfig:
     model: str = "gemini-3.8-flash"
     api_key_env: str = "GEMINI_API_KEY"
     temperature: float = 0.2
+    thinking_level: str = "medium"
     max_output_tokens: int = 12000
     max_frames: int = 32
 
@@ -78,7 +79,10 @@ class NarrationConfig:
 @dataclass(frozen=True)
 class TTSConfig:
     provider: str = "synthetic"
+    model: str = "gemini-3.8-flash-tts"
+    api_key_env: str = "GEMINI_API_KEY"
     voice: str | None = None
+    style: str = "natural, conversational, expressive YouTube narrator; clear sentence endings; natural pauses; believable Hinglish delivery"
     command: tuple[str, ...] = ()
     timeout_seconds: int = 180
 
@@ -204,6 +208,7 @@ def load_config(path: Path) -> AppConfig:
             model=str(llm.get("model", "gemini-3.8-flash")),
             api_key_env=str(llm.get("api_key_env", "GEMINI_API_KEY")),
             temperature=float(llm.get("temperature", 0.2)),
+            thinking_level=str(llm.get("thinking_level", "medium")).lower(),
             max_output_tokens=int(llm.get("max_output_tokens", 12000)),
             max_frames=int(llm.get("max_frames", 32)),
         ),
@@ -219,7 +224,10 @@ def load_config(path: Path) -> AppConfig:
         ),
         tts=TTSConfig(
             provider=str(tts.get("provider", "synthetic")).lower(),
+            model=str(tts.get("model", "gemini-3.8-flash-tts")),
+            api_key_env=str(tts.get("api_key_env", "GEMINI_API_KEY")),
             voice=_optional_string(tts.get("voice")),
+            style=str(tts.get("style", TTSConfig.style)),
             command=tuple(str(item) for item in tts.get("command", []) if str(item).strip()),
             timeout_seconds=int(tts.get("timeout_seconds", 180)),
         ),
@@ -278,10 +286,21 @@ def load_config(path: Path) -> AppConfig:
         raise ValueError("narration.words_per_minute must be between 60 and 220")
     if config.narration.speed <= 0:
         raise ValueError("narration.speed must be positive")
-    if config.tts.provider not in {"synthetic", "command"}:
+    if config.tts.provider not in {"synthetic", "command", "gemini"}:
         raise ValueError("tts.provider must be synthetic or command")
     if config.tts.provider == "command" and not config.tts.command:
         raise ValueError("tts.command is required when tts.provider=command")
+    if config.tts.provider == "gemini":
+        if not config.tts.model.strip():
+            raise ValueError("tts.model cannot be empty when tts.provider=gemini")
+        if not config.tts.api_key_env.strip():
+            raise ValueError("tts.api_key_env cannot be empty when tts.provider=gemini")
+        if not config.tts.voice:
+            raise ValueError("tts.voice is required when tts.provider=gemini")
+    if not config.llm.thinking_level.strip():
+        raise ValueError("llm.thinking_level cannot be empty")
+    if config.llm.model.startswith("gemini-3.8") and config.llm.thinking_level not in {"low", "medium", "high"}:
+        raise ValueError("llm.thinking_level must be low, medium, or high for Gemini 3.8")
     if config.tts.timeout_seconds < 1:
         raise ValueError("tts.timeout_seconds must be positive")
     if config.episode.scene_threshold <= 0:
