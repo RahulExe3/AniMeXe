@@ -212,3 +212,27 @@ tts:
     assert config.tts.model == "gemini-3.8-flash-tts"
     assert config.tts.api_key_env == "TEST_GEMINI_KEY"
     assert config.tts.voice == "Kore"
+
+
+
+def test_config_includes_audio_bgm_controls(tmp_path: Path) -> None:
+    path = tmp_path / "config.yml"
+    path.write_text(
+        """
+project:
+  name: AniMeXe
+audio:
+  bgm: true
+  music_dir: custom/music
+  bgm_volume: 0.15
+  bgm_ducking_ratio: 6
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path)
+
+    assert config.audio.bgm is True
+    assert config.audio.music_dir == "custom/music"
+    assert config.audio.bgm_volume == 0.15
+    assert config.audio.bgm_ducking_ratio == 6
