@@ -146,3 +146,27 @@ tts:
         "{output_file}",
     )
     assert config.tts.timeout_seconds == 90
+
+
+def test_config_includes_provider_fallbacks(tmp_path: Path) -> None:
+    path = tmp_path / "config.yml"
+    path.write_text(
+        """
+project:
+  name: AniMeXe
+provider:
+  name: kuhi
+  api_base_url: https://kuhi.example
+provider_fallbacks:
+  - name: anivexa
+    api_base_url: https://anivexa.example
+  - name: anivault
+    api_base_url: https://anivault.example
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path)
+
+    assert [item.name for item in config.provider_fallbacks] == ["anivexa", "anivault"]
+    assert config.provider_fallbacks[0].api_base_url == "https://anivexa.example"
