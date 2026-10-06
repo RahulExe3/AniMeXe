@@ -24,6 +24,15 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Restore Gemini response cache
+        uses: actions/cache/restore@v6
+        with:
+          path: workspace/cache/gemini
+          key: ${{ runner.os }}-animexe-gemini-v2-${{ hashFiles('src/animexe/**/*.py', 'pyproject.toml') }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-animexe-gemini-v2-${{ hashFiles('src/animexe/**/*.py', 'pyproject.toml') }}-
+            ${{ runner.os }}-animexe-gemini-v2-
+
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -232,6 +241,13 @@ jobs:
               raise SystemExit(f"final output is unexpectedly short: {duration:.2f}s")
           print(f"Final output validated: {duration:.2f}s")
           PY
+
+      - name: Save Gemini response cache
+        if: ${{ always() }}
+        uses: actions/cache/save@v6
+        with:
+          path: workspace/cache/gemini
+          key: ${{ runner.os }}-animexe-gemini-v2-${{ hashFiles('src/animexe/**/*.py', 'pyproject.toml') }}-${{ github.run_id }}
 
       - name: Upload full pipeline artifacts
         uses: actions/upload-artifact@v7
