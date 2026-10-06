@@ -6,7 +6,7 @@
 
 AniMeXe is a reusable episode-production engine:
 
-`anime library → scheduler → episode job → provider/local input → inspection → analysis → story → script → TTS → scene matching → timeline → audio/subtitles → FFmpeg render → validation → state/artifact`
+`anime library → scheduler → episode job → provider/local input → inspection → analysis → story → visual edit plan → script → TTS → constrained scene matching → timeline → audio/subtitles → FFmpeg render → validation → state/artifact`
 
 Publishing is a later adapter and is not part of the first production milestone.
 
@@ -133,20 +133,28 @@ Checkpoint chain:
 
 `input → inspected → scenes → transcript`
 
-### Phase 8 — Story engine and narration script
+### Phase 8 — Story engine, visual edit plan, and narration script
 
 The semantic story checkpoint is implemented with a deterministic extractive fallback plus an optional Gemini multimodal semantic pass.
 
-The implemented script checkpoint consumes the semantic story representation and generates an original spoken explanation with:
+The new **visual edit-plan checkpoint** sits between story understanding and narration. It selects a chronological subset of real episode scenes based on event importance, opening context, ending/payoff, and the configured target duration.
+
+The edit plan is persisted as:
+
+`workspace/analysis/<episode-name>/edit_plan.json`
+
+The narration script then consumes both `story.json` and `edit_plan.json`. The visual cut is a hard boundary: narration may explain only the events/scenes selected for the cut.
+
+The implemented script checkpoint generates:
 - English or Hinglish language mode;
 - Latin English or Roman Hinglish script;
 - strong hook and clear ending;
 - chronological body segments;
-- scene and story-event references;
-- approximately two-minute duration targets;
+- scene and story-event references constrained to the edit plan;
+- duration targets derived from the planned visual cut;
 - local validation against timing, word count, formatting artifacts, and obvious exact subtitle copying.
 
-The script manifest is persisted as the `script` checkpoint.
+The script manifest stores the edit-plan reference and is persisted as the `script` checkpoint.
 
 ### Phase 9 — Narration TTS
 
@@ -162,10 +170,17 @@ Measured TTS timing is authoritative; script-stage timing anchors are retained o
 
 ### Phase 10 — Intelligent editing
 
-The initial scene-matching checkpoint is now implemented.
+Visual edit planning and constrained scene matching are now implemented.
+
+The editor has two distinct responsibilities:
+
+1. **Edit planning before narration:** select the actual source scenes that will form the explanation visual cut.
+2. **Timing-aware matching after TTS:** fit measured narration audio inside those already-selected visual windows without reopening the entire episode as a candidate pool.
+
+The standalone visual-cut renderer can render the selected clips with no audio. This produces a reviewable artifact before TTS.
 
 The matcher consumes:
-- scene timestamps and representative positions;
+- edit-plan scene windows;
 - script-linked scene candidates;
 - measured TTS segment durations;
 - maximum clip duration;
@@ -242,7 +257,7 @@ Every expensive stage should write a checkpoint manifest containing:
 
 Example recovery state:
 
-`input ✓ → metadata ✓ → scenes ✓ → transcript ✓ → story ✓ → script ✓ → TTS ✗ → matching pending → render pending`
+`input ✓ → inspected ✓ → scenes ✓ → transcript ✓ → story ✓ → edit_plan ✓ → script ✓ → TTS ✗ → matching pending → render pending`
 
 The next run resumes at the failed stage.
 
@@ -293,6 +308,9 @@ The first real experiment is complete when AniMeXe can:
 
 YouTube publishing is not required for this milestone.
 
+
+> **Architecture correction:** narration is never generated from episode metadata alone. A real, readable episode must enter the analysis stage first. AniMeXe understands the actual media, builds a semantic story, selects the exact visual cut, and only then writes narration for that cut. Missing media is a hard failure, not a prompt-generation fallback.
+
 ## 8. Current implementation status
 
 **Foundation through the first production render pipeline are implemented.**
@@ -306,17 +324,19 @@ Current completed stack:
 - scene detection and representative frames;
 - embedded subtitle transcript extraction;
 - Gemini 3.8 Flash semantic story understanding;
-- Gemini 3.8 Flash narration-script generation;
+- semantic visual edit planning with persistent `edit_plan.json`;
+- narration-script generation constrained to the exact planned visual cut;
 - synthetic, command, and Gemini 3.8 Flash TTS;
-- narration-to-scene matching;
+- narration-to-scene matching constrained to edit-plan scene windows;
+- narration-free visual-cut renderer and manual GitHub artifact workflow;
 - declarative timeline generation;
 - FFmpeg rendering with source-audio mute;
 - optional local BGM with narration ducking;
 - SRT generation/burn-in;
 - ffprobe output validation;
 - one-command resumable episode pipeline;
-- manual provider-smoke and full-pipeline-smoke workflows;
-- PR/manual-only CI with current GitHub Actions runtimes.
+- full-pipeline-smoke and episode-visual-cut workflows;
+- push/PR/manual CI with current GitHub Actions runtimes.
 
 Completed in the current implementation slice:
 - Python package;
