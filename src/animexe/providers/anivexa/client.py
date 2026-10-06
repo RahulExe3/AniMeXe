@@ -47,57 +47,78 @@ class AnivexaProvider(Provider):
 
     @classmethod
     def _episode_items(cls, response: dict[str, Any]) -> list[EpisodeRef]:
+        """Normalize Anivexa's /episodes/:anilistId response.
+
+        The API returns one top-level object per provider, each containing:
+        { episodes: { sub: [...], dub: [...] } }.
+        """
+        anilist_id = cls._response_anilist_id(response)
         found: list[EpisodeRef] = []
-        seen: set[tuple[int, str, str | None]] = set()
-        providers = response.get("providers", {})
-        if isinstance(providers, dict):
-            for provider_name, provider_data in providers.items():
-                if not isinstance(provider_data, dict):
+        seen: set[tuple[int, str, str]] = set()
+
+        for provider_name, provider_data in response.items():
+            if provider_name in {"page", "type", "mappings"}:
+                continue
+            if not isinstance(provider_data, dict):
+                continue
+
+            grouped = provider_data.get("episodes")
+            if not isinstance(grouped, dict):
+                continue
+
+            for language in ("sub", "dub"):
+                items = grouped.get(language, [])
+                if not isinstance(items, list):
                     continue
-                grouped = provider_data.get("episodes")
-                if not isinstance(grouped, dict):
-                    continue
-                for language in ("sub", "dub"):
-                    for item in grouped.get(language, []) or []:
-                        if not isinstance(item, dict):
-                            continue
-                        number = item.get("number")
-                        if not isinstance(number, int) or number < 1:
-                            continue
-                        external_id = item.get("id") or item.get("episodeId")
-                        key = (number, language, str(external_id) if external_id is not None else None)
-                        if key in seen:
-                            continue
-                        seen.add(key)
-                        found.append(EpisodeRef(
-                            anime_id=f"anilist:{cls._response_anilist_id(response)}",
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    number = item.get("number")
+                    if not isinstance(number, int) or number < 1:
+                        continue
+                    external_id = item.get("id") or item.get("epSlug") or item.get("sourceNumber")
+                    external_text = (
+                        str(external_id) if external_id is not None else f"ep-{number}"
+                    )
+                    key = (number, language, f"{provider_name}:{external_text}")
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    found.append(
+                        EpisodeRef(
+                            anime_id=f"anilist:{anilist_id}" if anilist_id else "anilist:unknown",
                             season=1,
                             episode=number,
                             language=language,
-                            external_id=(f"{provider_name}:{external_id}" if external_id is not None else str(provider_name)),
-                        ))
+                            external_id=f"{provider_name}:{external_text}",
+                        )
+                    )
 
-        direct = response.get("episodes")
-        if isinstance(direct, list):
-            for item in direct:
-                if not isinstance(item, dict):
-                    continue
-                number = item.get("number") or item.get("episode")
-                if not isinstance(number, int) or number < 1:
-                    continue
-                language = cls._normalize_language(item.get("type") or item.get("language")) or "sub"
-                external_id = item.get("id") or item.get("episodeId")
-                key = (number, language, str(external_id) if external_id is not None else None)
-                if key in seen:
-                    continue
-                seen.add(key)
-                found.append(EpisodeRef(
-                    anime_id=f"anilist:{cls._response_anilist_id(response)}",
-                    season=1,
-                    episode=number,
-                    language=language,
-                    external_id=str(external_id) if external_id is not None else None,
-                ))
+        # Some provider-filtered deployments may return a bare episodes object.
+        grouped = response.get("episodes")
+        if isinstance(grouped, dict):
+            for language in ("sub", "dub"):
+                for item in grouped.get(language, []) or []:
+                    if not isinstance(item, dict):
+                        continue
+                    number = item.get("number")
+                    if not isinstance(number, int) or number < 1:
+                        continue
+                    external_id = item.get("id") or item.get("epSlug") or item.get("sourceNumber")
+                    external_text = str(external_id) if external_id is not None else f"ep-{number}"
+                    key = (number, language, external_text)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    found.append(
+                        EpisodeRef(
+                            anime_id=f"anilist:{anilist_id}" if anilist_id else "anilist:unknown",
+                            season=1,
+                            episode=number,
+                            language=language,
+                            external_id=external_text,
+                        )
+                    )
 
         found.sort(key=lambda item: (item.episode, item.language, item.external_id or ""))
         return found
