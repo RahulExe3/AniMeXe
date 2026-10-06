@@ -114,3 +114,35 @@ narration:
     assert config.narration.min_duration_seconds == 105
     assert config.narration.max_duration_seconds == 135
     assert config.narration.words_per_minute == 150
+
+
+def test_config_includes_tts_defaults(tmp_path: Path) -> None:
+    path = tmp_path / "config.yml"
+    path.write_text(
+        """
+project:
+  name: AniMeXe
+tts:
+  provider: command
+  voice: narrator
+  command:
+    - python
+    - tools/tts_runner.py
+    - "{text_file}"
+    - "{output_file}"
+  timeout_seconds: 90
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path)
+
+    assert config.tts.provider == "command"
+    assert config.tts.voice == "narrator"
+    assert config.tts.command == (
+        "python",
+        "tools/tts_runner.py",
+        "{text_file}",
+        "{output_file}",
+    )
+    assert config.tts.timeout_seconds == 90
