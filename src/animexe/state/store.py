@@ -102,6 +102,7 @@ class StateStore:
             item.setdefault("analysis_manifest", None)
             item.setdefault("scene_manifest", None)
             item.setdefault("transcript_manifest", None)
+            item.setdefault("story_manifest", None)
             record = EpisodeRecord(**item)
             record.validate()
             records.append(record)
