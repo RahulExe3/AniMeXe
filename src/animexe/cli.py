@@ -30,6 +30,7 @@ from .narration import (
     NarrationScriptManifest,
 )
 from .tts import CommandTTSSynthesizer, SyntheticTTSSynthesizer, TTSError
+from .matching import MatchError, SceneMatchManifest, SceneMatcher
 from .paths import ProjectPaths
 from .scheduler import Scheduler
 from .state import StateStore
@@ -180,6 +181,19 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="TTS backend (default: configured tts.provider)",
     )
+
+    episode_match = episode_sub.add_parser(
+        "match",
+        help="match measured narration audio to source scenes",
+    )
+    episode_match.add_argument("input_path", type=Path)
+    episode_match.add_argument("--scene-manifest", type=Path)
+    episode_match.add_argument("--tts-manifest", type=Path)
+    episode_match.add_argument("--anime-id")
+    episode_match.add_argument("--episode-number", type=int)
+    episode_match.add_argument("--season", type=int, default=1)
+    episode_match.add_argument("--output", type=Path)
+    episode_match.add_argument("--max-clip-duration", type=float, default=None)
 
     sub.add_parser("plan", help="show the scheduler's next job plan")
 
@@ -823,6 +837,101 @@ def main() -> None:
                 | {
                     "script_manifest_path": str(script_path),
                     "tts_manifest_path": str(output_manifest),
+                }
+            )
+            return
+
+    if args.command == "episode":
+        if args.episode_command == "match":
+            if (args.anime_id is None) != (args.episode_number is None):
+                parser.error("--anime-id and --episode-number must be supplied together")
+            if args.season < 1:
+                parser.error("--season must be >= 1")
+            if args.episode_number is not None and args.episode_number < 1:
+                parser.error("--episode-number must be >= 1")
+
+            scene_path = args.scene_manifest or (
+                paths.workspace
+                / "analysis"
+                / args.input_path.stem
+                / "scenes.json"
+            )
+            tts_path = args.tts_manifest or (
+                paths.workspace
+                / "narration"
+                / args.input_path.stem
+                / "tts.json"
+            )
+
+            try:
+                scene_manifest = SceneAnalysisManifest.read(scene_path)
+                tts_manifest = TTSManifest.read(tts_path)
+            except (OSError, ValueError, TypeError, KeyError) as exc:
+                parser.error(f"could not read scene/TTS manifests: {exc}")
+
+            config_path = paths.config / "config.yml"
+            if not config_path.exists():
+                config_path = paths.config / "config.example.yml"
+            app_config = load_config(config_path)
+
+            max_clip_duration = (
+                args.max_clip_duration
+                if args.max_clip_duration is not None
+                else app_config.video.max_clip_duration
+            )
+            if max_clip_duration <= 0:
+                parser.error("--max-clip-duration must be positive")
+
+            output_path = args.output or (
+                paths.workspace
+                / "narration"
+                / args.input_path.stem
+                / "matching.json"
+            )
+
+            try:
+                match_manifest = SceneMatcher(
+                    max_clip_duration=max_clip_duration
+                ).match(
+                    scene_manifest,
+                    tts_manifest,
+                    source_scenes=str(scene_path),
+                    source_tts=str(tts_path),
+                )
+            except MatchError as exc:
+                parser.error(str(exc))
+
+            match_manifest.write(output_path)
+
+            if args.anime_id:
+                assert args.episode_number is not None
+                episode_id = f"{args.anime_id}-s{args.season}-e{args.episode_number}"
+                existing = {
+                    item.id: item
+                    for item in store.list_episodes(args.anime_id)
+                }.get(episode_id)
+                record = existing or EpisodeRecord(
+                    id=episode_id,
+                    anime_id=args.anime_id,
+                    episode_number=args.episode_number,
+                )
+                record.status = "PROCESSING"
+                record.current_checkpoint = "matching"
+                record.failure_reason = None
+                record.provider = "local"
+                record.source_reference = str(
+                    args.input_path.expanduser().resolve()
+                )
+                record.tts_manifest = str(tts_path)
+                record.matching_manifest = str(output_path)
+                store.save_episode(record)
+
+            _print_json(
+                match_manifest.to_dict()
+                | {
+                    "scene_manifest_path": str(scene_path),
+                    "tts_manifest_path": str(tts_path),
+                    "matching_manifest_path": str(output_path),
                 }
             )
             return
