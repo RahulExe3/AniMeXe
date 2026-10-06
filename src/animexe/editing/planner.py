@@ -287,6 +287,51 @@ class EditPlanner:
             total_duration_seconds=total,
         )
 
+
+    def plan_visual_only(
+        self,
+        scenes: SceneAnalysisManifest,
+        *,
+        source_story: str = "visual-only",
+        source_scenes: str = "scenes.json",
+    ) -> EditPlanManifest:
+        """Build a deterministic visual-only cut directly from detected scenes."""
+        if not scenes.scenes:
+            raise EditPlanError("scene manifest contains no scenes")
+
+        # Give every detected scene a neutral semantic score and let the normal
+        # planner preserve first/last coverage while filling the requested duration.
+        events = tuple(
+            StoryEvent(
+                event_id=f"visual_{scene.index:04d}",
+                scene_ids=(scene.scene_id,),
+                start_seconds=scene.start_seconds,
+                end_seconds=scene.end_seconds,
+                text=f"Visual scene {scene.index}",
+                importance=0.5,
+                kind="visual_scene",
+            )
+            for scene in scenes.scenes
+        )
+        story = EpisodeStoryManifest(
+            schema_version=2,
+            episode_id=scenes.episode_id,
+            input_path=scenes.input_path,
+            input_sha256=scenes.input_sha256,
+            source_transcript="visual-only",
+            source_scenes=source_scenes,
+            method="visual_only",
+            evidence=StoryEvidence(),
+            events=events,
+            ending_event_id=events[-1].event_id,
+        )
+        return self.plan(
+            story,
+            scenes,
+            source_story=source_story,
+            source_scenes=source_scenes,
+        )
+
     @staticmethod
     def _validate_inputs(story: EpisodeStoryManifest, scenes: SceneAnalysisManifest) -> None:
         if story.input_path != scenes.input_path:
