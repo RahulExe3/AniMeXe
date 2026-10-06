@@ -60,3 +60,30 @@ episode:
     assert config.episode.scene_threshold == 31.5
     assert config.episode.scene_min_duration == 0.75
     assert config.episode.scene_frame_width == 480
+
+
+def test_config_includes_gemini_defaults(tmp_path: Path) -> None:
+    path = tmp_path / "config.yml"
+    path.write_text(
+        """
+project:
+  name: AniMeXe
+llm:
+  provider: gemini
+  model: gemini-test
+  api_key_env: TEST_GEMINI_KEY
+  temperature: 0.35
+  max_output_tokens: 4000
+  max_frames: 12
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path)
+
+    assert config.llm.provider == "gemini"
+    assert config.llm.model == "gemini-test"
+    assert config.llm.api_key_env == "TEST_GEMINI_KEY"
+    assert config.llm.temperature == 0.35
+    assert config.llm.max_output_tokens == 4000
+    assert config.llm.max_frames == 12
