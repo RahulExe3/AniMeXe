@@ -80,6 +80,7 @@ class EpisodeRecord:
     analysis_manifest: str | None = None
     scene_manifest: str | None = None
     transcript_manifest: str | None = None
+    story_manifest: str | None = None
     created_at: str = field(default_factory=utc_now)
     updated_at: str = field(default_factory=utc_now)
 
