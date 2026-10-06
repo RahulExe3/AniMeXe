@@ -48,6 +48,14 @@ narration:
   words_per_minute: 145
   speed: 1.0
 
+tts:
+  # synthetic is deterministic and useful for end-to-end pipeline tests.
+  # command bridges to a local/external TTS runner for real voices.
+  provider: synthetic
+  voice: null
+  command: []
+  timeout_seconds: 180
+
 video:
   width: 1920
   height: 1080
