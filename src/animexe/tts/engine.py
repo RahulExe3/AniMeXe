@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import math
+import os
 import re
 import shutil
 import subprocess
@@ -210,6 +211,7 @@ class GeminiTTSSynthesizer:
             "natural, conversational, expressive YouTube narrator; "
             "clear sentence endings; natural pauses; believable Hinglish delivery"
         ),
+        client: object | None = None,
     ) -> None:
         if not model.strip():
             raise ValueError("Gemini TTS model cannot be empty")
@@ -223,7 +225,7 @@ class GeminiTTSSynthesizer:
         self.api_key_env = api_key_env
         self.voice = voice
         self.style = style
-        self._client = None
+        self._client = client
 
     def synthesize(
         self,
@@ -308,7 +310,7 @@ class GeminiTTSSynthesizer:
     def _client_or_create(self):
         if self._client is not None:
             return self._client
-        api_key = __import__("os").environ.get(self.api_key_env, "").strip()
+        api_key = os.environ.get(self.api_key_env, "").strip()
         if not api_key:
             raise TTSError(
                 f"Gemini TTS API key is missing; set {self.api_key_env} in the environment"
@@ -336,7 +338,7 @@ def _extract_gemini_audio(response: object) -> bytes:
                 if isinstance(data, str) and data.strip():
                     try:
                         return base64.b64decode(data)
-                    except (ValueError, base64.binascii.Error):
+                    except (ValueError, __import__('binascii').Error):
                         continue
     except Exception:
         return b""
