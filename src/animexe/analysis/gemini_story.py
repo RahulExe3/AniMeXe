@@ -190,8 +190,7 @@ class GeminiStoryAnalyzer:
         candidates: list[str] = []
         configured = os.environ.get("GEMINI_MODEL", "").strip()
         fallback_env = os.environ.get("GEMINI_FALLBACK_MODELS", "").strip()
-        for candidate in [self.model, configured, *fallback_env.split(","),
-                          "gemini-2.5-flash-lite", "gemini-2.5-flash"]:
+        for candidate in [self.model, configured, *fallback_env.split(",")]:
             candidate = candidate.strip()
             if candidate and candidate not in candidates:
                 candidates.append(candidate)
