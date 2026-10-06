@@ -233,6 +233,7 @@ def _build_parser() -> argparse.ArgumentParser:
     provider_check.add_argument("anime_id", help="provider-independent anime id, e.g. anilist:21")
     provider_check.add_argument("--episode-number", type=int, required=True)
     provider_check.add_argument("--language", choices=("sub", "dub"), default="sub")
+    provider_check.add_argument("--output", type=Path, default=None)
 
     sub.add_parser("plan", help="show the scheduler's next job plan")
 
@@ -1174,7 +1175,10 @@ def main() -> None:
                 language=args.language,
             )
             selected = broker.best_catalog_provider(probes)
-            _print_json({
+            report = {
+                "anime_id": args.anime_id,
+                "episode_number": args.episode_number,
+                "language": args.language,
                 "probes": [
                     {
                         "provider": item.provider,
@@ -1189,7 +1193,16 @@ def main() -> None:
                     for item in probes
                 ],
                 "selected_catalog_provider": None if selected is None else selected.provider,
-            })
+            }
+            if args.output:
+                args.output.parent.mkdir(parents=True, exist_ok=True)
+                args.output.write_text(
+                    json.dumps(report, indent=2, ensure_ascii=False) + "\n",
+                    encoding="utf-8",
+                )
+            _print_json(report)
+            if not probes:
+                parser.error("no external providers are configured")
             return
 
     if args.command == "plan":
