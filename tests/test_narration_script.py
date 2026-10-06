@@ -5,6 +5,7 @@ import pytest
 from animexe.analysis.scenes import SceneAnalysisManifest, SceneRecord
 from animexe.analysis.story import EpisodeStoryManifest, StoryEvent, StoryEvidence
 from animexe.analysis.transcript import TranscriptAnalysisManifest, TranscriptSegment
+from animexe.editing import EditPlanManifest, PlannedClip
 from animexe.narration.script import GeminiNarrationScriptGenerator, NarrationScriptError
 
 
@@ -197,4 +198,32 @@ def test_requires_matching_language_script_pair() -> None:
     with pytest.raises(NarrationScriptError, match="English narration"):
         GeminiNarrationScriptGenerator(client=_FakeClient(_payload())).generate(
             _story(), transcript=_transcript(), language="english", script="roman"
+        )
+
+def test_narration_is_constrained_to_visual_edit_plan() -> None:
+    edit_plan = EditPlanManifest(
+        schema_version=1,
+        episode_id="demo-s1-e1",
+        input_path="/tmp/episode.mkv",
+        input_sha256="a" * 64,
+        source_story="story.json",
+        source_scenes="scenes.json",
+        target_duration_seconds=120.0,
+        min_duration_seconds=105.0,
+        max_duration_seconds=135.0,
+        max_clip_duration_seconds=60.0,
+        selected_event_ids=("event_0001", "event_0003"),
+        clips=(
+            PlannedClip("clip_001", "event_0001", "scene_0001", 0.0, 60.0, 60.0, 0.8, "setup"),
+            PlannedClip("clip_002", "event_0003", "scene_0003", 60.0, 120.0, 60.0, 0.85, "ending"),
+        ),
+        total_duration_seconds=120.0,
+    )
+    with pytest.raises(NarrationScriptError, match="unknown scene IDs"):
+        GeminiNarrationScriptGenerator(client=_FakeClient(_payload())).generate(
+            _story(),
+            edit_plan=edit_plan,
+            transcript=_transcript(),
+            language="hinglish",
+            script="roman",
         )
