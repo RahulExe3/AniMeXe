@@ -56,8 +56,9 @@ The current renderer:
 4. concatenates the video clips;
 5. deliberately ignores source episode audio;
 6. delays measured narration audio to its timeline position;
-7. mixes the narration tracks;
-8. optionally burns the generated SRT subtitles;
+7. optionally loops a supplied local BGM track at low volume and ducks it under narration;
+8. mixes the narration/BGM master;
+9. optionally burns the generated SRT subtitles;
 9. writes an MP4 with H.264 video and AAC audio.
 
 The renderer contains no scene-scoring or story-generation logic.
