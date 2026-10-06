@@ -234,6 +234,7 @@ def _build_parser() -> argparse.ArgumentParser:
     provider_check.add_argument("--episode-number", type=int, required=True)
     provider_check.add_argument("--language", choices=("sub", "dub"), default="sub")
     provider_check.add_argument("--output", type=Path, default=None)
+    provider_check.add_argument("--require-catalog", action="store_true", help="fail when no provider confirms the episode")
 
     sub.add_parser("plan", help="show the scheduler's next job plan")
 
@@ -1152,17 +1153,21 @@ def main() -> None:
         registry = build_registry(app_config, paths.root)
 
         if args.provider_command == "status":
-            result = []
+            result = {"providers": []}
             for name in registry.names():
                 provider = registry.get(name)
                 health = provider.check_health()
-                result.append({
+                result["providers"].append({
                     "provider": health.provider,
                     "status": health.status,
                     "checked_at": health.checked_at,
                     "detail": health.detail,
                 })
-            _print_json(result)
+            rendered = json.dumps(result, indent=2, ensure_ascii=False)
+            if args.output:
+                args.output.parent.mkdir(parents=True, exist_ok=True)
+                args.output.write_text(rendered + "\n", encoding="utf-8")
+            print(rendered)
             return
 
         if args.provider_command == "check":
@@ -1203,6 +1208,8 @@ def main() -> None:
             _print_json(report)
             if not probes:
                 parser.error("no external providers are configured")
+            if args.require_catalog and selected is None:
+                parser.error("no configured provider confirmed the requested episode")
             return
 
     if args.command == "plan":
