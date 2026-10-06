@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -77,6 +78,15 @@ class EpisodePipeline:
         source = input_path.expanduser().resolve()
         if not source.is_file():
             raise PipelineError(f"input episode not found: {source}")
+
+        digest = hashlib.sha256()
+        try:
+            with source.open("rb") as handle:
+                while chunk := handle.read(1024 * 1024):
+                    digest.update(chunk)
+        except OSError as exc:
+            raise PipelineError(f"could not fingerprint input episode: {exc}") from exc
+        input_sha256 = digest.hexdigest()
         if anime_id is not None and episode_number is None:
             raise PipelineError("episode_number is required when anime_id is provided")
         if episode_number is not None and episode_number < 1:
@@ -104,6 +114,8 @@ class EpisodePipeline:
                 analysis = EpisodeAnalysisManifest.read(analysis_path)
                 if str(source) != analysis.input_path:
                     raise PipelineError("existing analysis checkpoint belongs to a different input")
+                if analysis.input_sha256 and analysis.input_sha256 != input_sha256:
+                    raise PipelineError("existing analysis checkpoint fingerprint does not match the current input")
                 resumed.append("inspected")
             except (OSError, ValueError, TypeError) as exc:
                 raise PipelineError(f"invalid analysis checkpoint: {exc}") from exc
@@ -118,6 +130,8 @@ class EpisodePipeline:
                 scenes = SceneAnalysisManifest.read(scenes_path)
                 if scenes.input_path != str(source):
                     raise PipelineError("existing scene checkpoint belongs to a different input")
+                if scenes.input_sha256 and scenes.input_sha256 != input_sha256:
+                    raise PipelineError("existing scene checkpoint fingerprint does not match the current input")
                 resumed.append("scenes")
             except (OSError, ValueError, TypeError) as exc:
                 raise PipelineError(f"invalid scene checkpoint: {exc}") from exc
@@ -143,6 +157,8 @@ class EpisodePipeline:
                 transcript = TranscriptAnalysisManifest.read(transcript_path)
                 if transcript.input_path != str(source):
                     raise PipelineError("existing transcript checkpoint belongs to a different input")
+                if transcript.input_sha256 and transcript.input_sha256 != input_sha256:
+                    raise PipelineError("existing transcript checkpoint fingerprint does not match the current input")
                 resumed.append("transcript")
             except (OSError, ValueError, TypeError) as exc:
                 raise PipelineError(f"invalid transcript checkpoint: {exc}") from exc
@@ -165,6 +181,8 @@ class EpisodePipeline:
                 story = EpisodeStoryManifest.read(story_path)
                 if story.input_path != str(source):
                     raise PipelineError("existing story checkpoint belongs to a different input")
+                if story.input_sha256 and story.input_sha256 != input_sha256:
+                    raise PipelineError("existing story checkpoint fingerprint does not match the current input")
                 resumed.append("story")
             except (OSError, ValueError, TypeError, KeyError) as exc:
                 raise PipelineError(f"invalid story checkpoint: {exc}") from exc
@@ -196,6 +214,8 @@ class EpisodePipeline:
                 script = NarrationScriptManifest.read(script_path)
                 if script.input_path != str(source):
                     raise PipelineError("existing script checkpoint belongs to a different input")
+                if script.input_sha256 and script.input_sha256 != input_sha256:
+                    raise PipelineError("existing script checkpoint fingerprint does not match the current input")
                 resumed.append("script")
             except (OSError, ValueError, TypeError, KeyError) as exc:
                 raise PipelineError(f"invalid script checkpoint: {exc}") from exc
@@ -228,6 +248,8 @@ class EpisodePipeline:
                 tts = TTSManifest.read(tts_path)
                 if tts.input_path != str(source):
                     raise PipelineError("existing TTS checkpoint belongs to a different input")
+                if tts.input_sha256 and tts.input_sha256 != input_sha256:
+                    raise PipelineError("existing TTS checkpoint fingerprint does not match the current input")
                 resumed.append("tts")
             except (OSError, ValueError, TypeError, KeyError) as exc:
                 raise PipelineError(f"invalid TTS checkpoint: {exc}") from exc
@@ -263,6 +285,10 @@ class EpisodePipeline:
         matching_path = narration_dir / "matching.json"
         if matching_path.exists():
             matching = SceneMatchManifest.read(matching_path)
+            if matching.input_path != str(source):
+                raise PipelineError("existing matching checkpoint belongs to a different input")
+            if matching.input_sha256 and matching.input_sha256 != input_sha256:
+                raise PipelineError("existing matching checkpoint fingerprint does not match the current input")
             resumed.append("matching")
         else:
             matching = SceneMatcher(
@@ -279,6 +305,10 @@ class EpisodePipeline:
         timeline_path = narration_dir / "timeline.json"
         if timeline_path.exists():
             timeline = TimelineManifest.read(timeline_path)
+            if timeline.input_path != str(source):
+                raise PipelineError("existing timeline checkpoint belongs to a different input")
+            if timeline.input_sha256 and timeline.input_sha256 != input_sha256:
+                raise PipelineError("existing timeline checkpoint fingerprint does not match the current input")
             resumed.append("timeline")
         else:
             timeline = TimelineBuilder().build(
@@ -292,6 +322,10 @@ class EpisodePipeline:
 
         output_path = self.paths.workspace / "output" / f"{stem}.mp4"
         if output_path.exists() and output_path.stat().st_size > 0:
+            try:
+                FFmpegRenderer._validate_output(output_path)
+            except Exception as exc:
+                raise PipelineError(f"existing render failed validation: {exc}") from exc
             resumed.append("render")
         else:
             FFmpegRenderer(
