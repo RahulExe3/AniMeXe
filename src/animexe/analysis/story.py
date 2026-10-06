@@ -116,6 +116,9 @@ class ExtractiveStoryAnalyzer:
         self,
         transcript: TranscriptAnalysisManifest,
         scenes: SceneAnalysisManifest,
+        *,
+        source_transcript: str = "transcript.json",
+        source_scenes: str = "scenes.json",
     ) -> EpisodeStoryManifest:
         if transcript.input_path != scenes.input_path:
             raise StoryAnalysisError("transcript and scene manifests reference different input files")
@@ -160,8 +163,8 @@ class ExtractiveStoryAnalyzer:
             episode_id=transcript.episode_id or scenes.episode_id,
             input_path=transcript.input_path,
             input_sha256=transcript.input_sha256 or scenes.input_sha256,
-            source_transcript="transcript.json",
-            source_scenes="scenes.json",
+            source_transcript=source_transcript,
+            source_scenes=source_scenes,
             method="extractive",
             evidence=StoryEvidence(
                 characters=tuple(characters),
