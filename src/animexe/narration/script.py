@@ -308,22 +308,110 @@ class GeminiNarrationScriptGenerator:
             model=used_model,
         )
 
-    def _rest_generate(self) -> _ResponseClient:
-        if self._client is not None:
-            return self._client
+    def _rest_generate(self, prompt: str) -> tuple[str, str]:
         api_key = os.environ.get(self.api_key_env, "").strip()
         if not api_key:
             raise NarrationScriptError(
                 f"Gemini API key is missing; set {self.api_key_env} in the environment"
             )
-        try:
-            from google import genai
-        except ImportError as exc:
-            raise NarrationScriptError(
-                "google-genai is not installed; install the project dependencies first"
-            ) from exc
-        self._client = genai.Client(api_key=api_key)
-        return self._client
+
+        candidates: list[str] = []
+        configured = os.environ.get("GEMINI_MODEL", "").strip()
+        fallback_env = os.environ.get("GEMINI_FALLBACK_MODELS", "").strip()
+        for candidate in [self.model, configured, *fallback_env.split(",")]:
+            candidate = candidate.strip()
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+        if not candidates:
+            raise NarrationScriptError("no Gemini models are configured")
+
+        generation_config: dict[str, Any] = {
+            "maxOutputTokens": self.max_output_tokens,
+            "responseMimeType": "application/json",
+            "responseSchema": self._rest_schema(SCRIPT_RESPONSE_SCHEMA),
+        }
+
+        last_error = "unknown error"
+        for candidate_model in candidates:
+            if candidate_model.startswith("gemini-3"):
+                generation_config["thinkingConfig"] = {
+                    "thinkingLevel": self.thinking_level
+                }
+                generation_config.pop("temperature", None)
+            else:
+                generation_config.pop("thinkingConfig", None)
+                generation_config["temperature"] = self.temperature
+
+            url = (
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{candidate_model}:generateContent"
+            )
+            for attempt in range(3):
+                try:
+                    response = requests.post(
+                        url,
+                        headers={
+                            "x-goog-api-key": api_key,
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "contents": [{"parts": [{"text": prompt}]}],
+                            "generationConfig": generation_config,
+                        },
+                        timeout=90,
+                    )
+                    if response.status_code in {429, 500, 502, 503, 504}:
+                        last_error = f"HTTP {response.status_code}"
+                        if attempt < 2:
+                            time.sleep(2 ** attempt)
+                            continue
+                        break
+
+                    response.raise_for_status()
+                    payload = response.json()
+                    text = payload["candidates"][0]["content"]["parts"][0]["text"]
+                    if isinstance(text, str) and text.strip():
+                        return text, candidate_model
+                    last_error = f"empty response from {candidate_model}"
+                except (
+                    requests.RequestException,
+                    KeyError,
+                    IndexError,
+                    TypeError,
+                    ValueError,
+                ) as exc:
+                    last_error = str(exc)
+                    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+                        last_error = (
+                            f"HTTP {exc.response.status_code}: "
+                            f"{exc.response.text[:1000]}"
+                        )
+                    if attempt < 2:
+                        time.sleep(2 ** attempt)
+                        continue
+                    break
+
+        raise NarrationScriptError(
+            "Gemini REST generation failed after retries: " + last_error
+        )
+
+    @staticmethod
+    def _rest_schema(schema: dict[str, Any]) -> dict[str, Any]:
+        def convert(value: Any) -> Any:
+            if isinstance(value, dict):
+                return {
+                    key: (
+                        value.upper()
+                        if key == "type" and isinstance(value, str)
+                        else convert(value)
+                    )
+                    for key, value in value.items()
+                }
+            if isinstance(value, list):
+                return [convert(item) for item in value]
+            return value
+
+        return convert(schema)
 
     def _generation_config(self) -> Any:
         try:
