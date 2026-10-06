@@ -43,7 +43,10 @@
 - Automatic candidate-pool and active-slot management.
 - Kuhi primary adapter.
 - Anivexa secondary adapter.
+- AniVault secondary catalog adapter.
 - Provider health, source usability, and fallback scoring.
+- Concurrent provider probing through `ProviderBroker`.
+- Manual provider smoke workflow for real endpoint verification.
 - Kitsune compatibility kept as a legacy/reference adapter.
 - Provider health and fallback.
 - GitHub Actions analyze/render workflows.
