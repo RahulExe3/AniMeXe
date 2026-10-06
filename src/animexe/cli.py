@@ -24,7 +24,12 @@ from .config import load_config
 from .logging import configure_logging
 from .metadata import MetadataLibrary, MetadataService
 from .models import AnimeRecord, EpisodeRecord
-from .narration import GeminiNarrationScriptGenerator, NarrationScriptError
+from .narration import (
+    GeminiNarrationScriptGenerator,
+    NarrationScriptError,
+    NarrationScriptManifest,
+)
+from .tts import CommandTTSSynthesizer, SyntheticTTSSynthesizer, TTSError
 from .paths import ProjectPaths
 from .scheduler import Scheduler
 from .state import StateStore
@@ -157,6 +162,20 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=("latin", "roman"),
         default=None,
         help="writing system: latin for English, roman for Hinglish",
+    )
+
+    episode_tts = episode_sub.add_parser(
+        "tts",
+        help="synthesize narration audio and write the TTS checkpoint",
+    )
+    episode_tts.add_argument("input_path", type=Path)
+    episode_tts.add_argument("--script-manifest", type=Path)
+    episode_tts.add_argument("--output", type=Path)
+    episode_tts.add_argument(
+        "--provider",
+        choices=("synthetic", "command"),
+        default=None,
+        help="TTS backend (default: configured tts.provider)",
     )
 
     sub.add_parser("plan", help="show the scheduler's next job plan")
@@ -710,6 +729,67 @@ def main() -> None:
                     "story_manifest_path": str(story_path),
                     "transcript_manifest_path": str(transcript_path),
                     "script_manifest_path": str(output_path),
+                }
+            )
+            return
+
+    if args.command == "episode":
+        if args.episode_command == "tts":
+            script_path = args.script_manifest or (
+                paths.workspace
+                / "narration"
+                / args.input_path.stem
+                / "script.json"
+            )
+            try:
+                script_manifest = NarrationScriptManifest.read(script_path)
+            except (OSError, ValueError, TypeError, KeyError) as exc:
+                parser.error(f"could not read narration script manifest: {exc}")
+
+            config_path = paths.config / "config.yml"
+            if not config_path.exists():
+                config_path = paths.config / "config.example.yml"
+            app_config = load_config(config_path)
+
+            provider = (args.provider or app_config.tts.provider).strip().lower()
+            output_dir = (
+                args.output.parent
+                if args.output
+                else paths.workspace / "narration" / args.input_path.stem / "audio"
+            )
+            output_manifest = args.output or (
+                paths.workspace
+                / "narration"
+                / args.input_path.stem
+                / "tts.json"
+            )
+
+            try:
+                if provider == "synthetic":
+                    synthesizer = SyntheticTTSSynthesizer(
+                        words_per_minute=app_config.narration.words_per_minute,
+                    )
+                else:
+                    synthesizer = CommandTTSSynthesizer(
+                        tuple(app_config.tts.command),
+                        voice=app_config.tts.voice,
+                        timeout_seconds=app_config.tts.timeout_seconds,
+                    )
+                tts_manifest = synthesizer.synthesize(
+                    script_manifest,
+                    output_dir=output_dir,
+                    source_script=str(script_path),
+                )
+            except TTSError as exc:
+                parser.error(str(exc))
+
+            tts_manifest.write(output_manifest)
+
+            _print_json(
+                tts_manifest.to_dict()
+                | {
+                    "script_manifest_path": str(script_path),
+                    "tts_manifest_path": str(output_manifest),
                 }
             )
             return
