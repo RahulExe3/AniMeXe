@@ -31,6 +31,7 @@ from .narration import (
 )
 from .tts import CommandTTSSynthesizer, SyntheticTTSSynthesizer, TTSError
 from .matching import MatchError, SceneMatchManifest, SceneMatcher
+from .render import FFmpegRenderer, RenderError, TimelineBuilder, TimelineManifest
 from .paths import ProjectPaths
 from .scheduler import Scheduler
 from .state import StateStore
