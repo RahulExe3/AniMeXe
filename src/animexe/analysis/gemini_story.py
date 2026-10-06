@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import time
@@ -16,6 +17,21 @@ from .story import (
     StoryEvidence,
 )
 from .transcript import TranscriptAnalysisManifest
+
+
+STORY_CACHE_VERSION = 2
+STORY_REQUIRED_FIELDS = (
+    "episode_summary",
+    "characters",
+    "locations",
+    "keywords",
+    "relationships",
+    "events",
+    "ending",
+    "continuity_notes",
+    "narration_points",
+    "confidence",
+)
 
 
 class GeminiStoryError(RuntimeError):
@@ -163,14 +179,76 @@ class GeminiStoryAnalyzer:
 
         payload = self._unwrap_story_payload(payload)
 
-        return self._manifest_from_payload(
-            payload,
-            transcript,
-            scenes,
-            source_transcript=source_transcript,
-            source_scenes=source_scenes,
+        try:
+            manifest = self._manifest_from_payload(
+                payload,
+                transcript,
+                scenes,
+                source_transcript=source_transcript,
+                source_scenes=source_scenes,
+                model=used_model,
+            )
+        except GeminiStoryError as first_error:
+            if "missing fields:" not in str(first_error):
+                raise
+
+            repair_prompt = (
+                "The previous Gemini story response was valid JSON but incomplete. "
+                "Repair it into one complete story object. Return ONLY JSON. "
+                "Preserve every valid field from the draft. Do not invent events, characters, "
+                "locations, relationships, dialogue, or outcomes. For genuinely unsupported "
+                "list fields, use an empty array. The events list must contain every meaningful "
+                "event explicitly supported by the supplied transcript and scene evidence. "
+                "The top-level object MUST contain exactly these fields: "
+                + ", ".join(STORY_REQUIRED_FIELDS)
+                + "\n\nORIGINAL TASK:\n"
+                + prompt
+                + "\n\nINCOMPLETE DRAFT:\n"
+                + json.dumps(payload, ensure_ascii=False)
+                + "\n\nVALIDATION ERROR:\n"
+                + str(first_error)
+            )
+            last_error: Exception = first_error
+            for _ in range(2):
+                repair_text, repair_model = self._rest_generate(
+                    repair_prompt,
+                    scenes,
+                    scene_manifest_dir=scene_manifest_dir,
+                )
+                try:
+                    repaired = self._unwrap_story_payload(json.loads(repair_text))
+                    manifest = self._manifest_from_payload(
+                        repaired,
+                        transcript,
+                        scenes,
+                        source_transcript=source_transcript,
+                        source_scenes=source_scenes,
+                        model=repair_model,
+                    )
+                    text = repair_text
+                    used_model = repair_model
+                    break
+                except (json.JSONDecodeError, GeminiStoryError) as exc:
+                    last_error = exc
+                    repair_prompt += (
+                        "\n\nREPAIR AGAIN. The last repair was still invalid: "
+                        + str(exc)
+                        + "\nDo not omit any required top-level field."
+                    )
+            else:
+                raise GeminiStoryError(
+                    "Gemini story response could not be repaired after two validation passes: "
+                    + str(last_error)
+                ) from last_error
+
+        self._save_cached_response(
+            prompt,
+            scenes=scenes,
             model=used_model,
+            text=text,
+            scene_manifest_dir=scene_manifest_dir,
         )
+        return manifest
 
     def _rest_generate(
         self,
@@ -228,6 +306,15 @@ class GeminiStoryAnalyzer:
                 added += 1
 
         errors: list[str] = []
+        cached = self._load_cached_response(
+            prompt,
+            scenes=scenes,
+            model_candidates=model_candidates,
+            scene_manifest_dir=scene_manifest_dir,
+        )
+        if cached is not None:
+            return cached
+
         for candidate_model in model_candidates:
             url = (
                 "https://generativelanguage.googleapis.com/v1beta/models/"
@@ -239,6 +326,7 @@ class GeminiStoryAnalyzer:
                     generation_config: dict[str, Any] = {
                         "maxOutputTokens": self.max_output_tokens,
                         "responseMimeType": "application/json",
+                        "responseSchema": self._rest_schema(STORY_RESPONSE_SCHEMA),
                     }
                     candidate_lower = candidate_model.lower()
                     if candidate_lower.startswith("gemini-3"):
@@ -270,17 +358,11 @@ class GeminiStoryAnalyzer:
 
                     response.raise_for_status()
                     payload = response.json()
-                    try:
-                        text = payload["candidates"][0]["content"]["parts"][0]["text"]
-                        if isinstance(text, str) and text.strip():
-                            return text, candidate_model
-                    except (KeyError, IndexError, TypeError) as exc:
-                        raise GeminiStoryError(
-                            "Gemini returned an unexpected response; inspect the API response and retry."
-                        ) from exc
-
+                    text = self._response_text(payload)
+                    if text:
+                        return text, candidate_model
                     errors.append(
-                        f"{candidate_model} attempt {attempt + 1}: empty response"
+                        f"{candidate_model} attempt {attempt + 1}: {self._response_diagnostic(payload)}"
                     )
                 except requests.RequestException as exc:
                     detail = str(exc)
@@ -301,6 +383,128 @@ class GeminiStoryAnalyzer:
             "Gemini REST generation failed after retries. "
             + " | ".join(errors[-8:])
         )
+
+    @staticmethod
+    def _rest_schema(schema: dict[str, Any]) -> dict[str, Any]:
+        def convert(value: Any) -> Any:
+            if isinstance(value, dict):
+                return {
+                    key: (
+                        value.upper()
+                        if key == "type" and isinstance(value, str)
+                        else convert(value)
+                    )
+                    for key, value in value.items()
+                }
+            if isinstance(value, list):
+                return [convert(item) for item in value]
+            return value
+
+        return convert(schema)
+
+    @staticmethod
+    def _response_text(payload: Any) -> str:
+        if not isinstance(payload, dict):
+            return ""
+        for candidate in payload.get("candidates") or []:
+            if not isinstance(candidate, dict):
+                continue
+            content = candidate.get("content") or {}
+            texts: list[str] = []
+            for part in content.get("parts") or []:
+                if not isinstance(part, dict) or part.get("thought"):
+                    continue
+                value = part.get("text")
+                if isinstance(value, str) and value.strip():
+                    texts.append(value)
+            if texts:
+                return "\n".join(texts).strip()
+        return ""
+
+    @staticmethod
+    def _response_diagnostic(payload: Any) -> str:
+        if not isinstance(payload, dict):
+            return "empty or non-object response"
+        feedback = payload.get("promptFeedback") or {}
+        block_reason = feedback.get("blockReason")
+        if block_reason:
+            return f"no text; prompt block reason={block_reason}"
+        finishes = [
+            item.get("finishReason")
+            for item in payload.get("candidates") or []
+            if isinstance(item, dict) and item.get("finishReason")
+        ]
+        if finishes:
+            return f"no text; finishReason={','.join(map(str, finishes))}"
+        return "no text candidate"
+
+    @staticmethod
+    def _cache_root(scene_manifest_dir: Path | None) -> Path:
+        configured = os.getenv("ANIMEXE_GEMINI_CACHE_DIR", "").strip()
+        if configured:
+            return Path(configured).expanduser()
+        return Path.cwd() / "workspace" / "cache" / "gemini" / "story"
+
+    @staticmethod
+    def _cache_key(prompt: str, scenes: SceneAnalysisManifest, model: str) -> str:
+        payload = {
+            "version": STORY_CACHE_VERSION,
+            "model": model,
+            "prompt": prompt,
+            "input_sha256": scenes.input_sha256,
+        }
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
+
+    @classmethod
+    def _load_cached_response(
+        cls,
+        prompt: str,
+        *,
+        scenes: SceneAnalysisManifest,
+        model_candidates: list[str],
+        scene_manifest_dir: Path | None,
+    ) -> tuple[str, str] | None:
+        root = cls._cache_root(scene_manifest_dir)
+        for model in model_candidates:
+            path = root / f"{cls._cache_key(prompt, scenes, model)}.json"
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError, TypeError):
+                continue
+            text = payload.get("text") if isinstance(payload, dict) else None
+            cached_model = payload.get("model") if isinstance(payload, dict) else None
+            if isinstance(text, str) and text.strip() and isinstance(cached_model, str):
+                return text, cached_model
+        return None
+
+    @classmethod
+    def _save_cached_response(
+        cls,
+        prompt: str,
+        *,
+        scenes: SceneAnalysisManifest,
+        model: str,
+        text: str,
+        scene_manifest_dir: Path | None,
+    ) -> None:
+        root = cls._cache_root(scene_manifest_dir)
+        path = root / f"{cls._cache_key(prompt, scenes, model)}.json"
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(
+                json.dumps(
+                    {"version": STORY_CACHE_VERSION, "model": model, "text": text},
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            tmp.replace(path)
+        except OSError:
+            return
 
     def _generation_config(self) -> Any:
         try:
@@ -475,18 +679,7 @@ class GeminiStoryAnalyzer:
         if not isinstance(payload, dict):
             raise GeminiStoryError("Gemini story response must be a JSON object")
 
-        required = (
-            "episode_summary",
-            "characters",
-            "locations",
-            "keywords",
-            "relationships",
-            "events",
-            "ending",
-            "continuity_notes",
-            "narration_points",
-            "confidence",
-        )
+        required = STORY_REQUIRED_FIELDS
         missing = [key for key in required if key not in payload]
         if missing:
             raise GeminiStoryError(
