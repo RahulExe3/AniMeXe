@@ -446,41 +446,6 @@ Narration requirements:
 
 ### Current narration-script checkpoint
 
-The narration script is generated after semantic story understanding. The same story manifest can be rendered into either supported narration language without repeating scene or story analysis.
-
-Supported modes:
-
-```text
-english  → Latin script
-hinglish → Roman script
-```
-
-Default targets are approximately two minutes:
-
-```yaml
-narration:
-  language: hinglish
-  script: roman
-  target_duration_seconds: 120
-  min_duration_seconds: 105
-  max_duration_seconds: 135
-  words_per_minute: 145
-```
-
-The script generator uses Gemini structured output and validates scene/event references, chronological segment anchors, word count, duration bounds, formatting artifacts, and obvious exact subtitle copying. The generated manifest is stored under `workspace/narration/<input-name>/script.json`.
-
-CLI examples:
-
-```bash
-python -m animexe episode script /path/to/episode.mkv
-python -m animexe episode script /path/to/episode.mkv --language english --script latin
-python -m animexe episode script /path/to/episode.mkv --language hinglish --script roman
-```
-
-The script stage provides provisional narration-timeline anchors. Real TTS durations become authoritative at the next checkpoint.
-
-### Current narration-script checkpoint
-
 The narration script is generated after semantic story understanding. The same `story.json` can produce either supported narration language without repeating scene or story analysis.
 
 Supported modes:
