@@ -1,0 +1,186 @@
+name: AniMeXe Full Pipeline Smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install media tools
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -version | head -n 1
+          ffprobe -version | head -n 1
+
+      - name: Install project
+        run: python -m pip install --upgrade pip && python -m pip install .
+
+      - name: Validate Gemini secret presence
+        run: |
+          test -n "$GEMINI_API_KEY" || {
+            echo "::error::GEMINI_API_KEY repository secret is missing."
+            exit 1
+          }
+
+      - name: Create isolated smoke-test configuration
+        run: |
+          cp config/config.example.yml config/config.yml
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          path = Path("config/config.yml")
+          data = yaml.safe_load(path.read_text(encoding="utf-8"))
+          data["llm"]["model"] = "gemini-3.8-flash"
+          data["llm"]["thinking_level"] = "low"
+          data["llm"]["max_frames"] = 4
+          data["llm"]["max_output_tokens"] = 5000
+          data["narration"]["language"] = "hinglish"
+          data["narration"]["script"] = "roman"
+          data["narration"]["target_duration_seconds"] = 20
+          data["narration"]["min_duration_seconds"] = 15
+          data["narration"]["max_duration_seconds"] = 30
+          data["narration"]["words_per_minute"] = 120
+          data["tts"]["provider"] = "gemini"
+          data["tts"]["model"] = "gemini-3.8-flash-tts"
+          data["tts"]["api_key_env"] = "GEMINI_API_KEY"
+          data["tts"]["voice"] = "Kore"
+          data["tts"]["style"] = (
+              "natural, conversational, expressive YouTube narrator; "
+              "clear sentence endings; natural pauses; believable Hinglish delivery"
+          )
+          path.write_text(
+              yaml.safe_dump(data, sort_keys=False, allow_unicode=True),
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Create synthetic multi-scene episode with embedded subtitles
+        run: |
+          mkdir -p workspace/e2e
+          cat > workspace/e2e/transcript.srt <<'SRT'
+          1
+          00:00:00,500 --> 00:00:04,000
+          A quiet signal reaches the camp.
+
+          2
+          00:00:06,500 --> 00:00:10,000
+          The team follows a strange light.
+
+          3
+          00:00:12,500 --> 00:00:16,000
+          A hidden gate opens in the ruins.
+
+          4
+          00:00:18,000 --> 00:00:23,000
+          They step through and discover a new path.
+          SRT
+
+          ffmpeg -hide_banner -loglevel error -y             -f lavfi -i "color=c=red:s=640x360:r=30:d=6"             -f lavfi -i "color=c=blue:s=640x360:r=30:d=6"             -f lavfi -i "color=c=green:s=640x360:r=30:d=6"             -f lavfi -i "color=c=purple:s=640x360:r=30:d=6"             -filter_complex "[0:v][1:v][2:v][3:v]concat=n=4:v=1:a=0,format=yuv420p[v]"             -map "[v]" -c:v libx264 -preset ultrafast -crf 30 -an             workspace/e2e/video-only.mkv
+
+          ffmpeg -hide_banner -loglevel error -y             -i workspace/e2e/video-only.mkv             -i workspace/e2e/transcript.srt             -map 0:v:0 -map 1:0             -c:v copy -c:s srt -metadata:s:s:0 language=eng             workspace/e2e/test-episode.mkv
+
+          ffprobe -v error -show_entries format=duration             -of default=noprint_wrappers=1:nokey=1 workspace/e2e/test-episode.mkv
+
+      - name: Inspect episode
+        run: >
+          python -m animexe episode inspect workspace/e2e/test-episode.mkv
+          --anime-id anilist:21 --episode-number 1 --season 1
+
+      - name: Detect scenes
+        run: >
+          python -m animexe episode scenes workspace/e2e/test-episode.mkv
+          --anime-id anilist:21 --episode-number 1 --season 1
+
+      - name: Extract transcript
+        run: >
+          python -m animexe episode transcript workspace/e2e/test-episode.mkv
+          --anime-id anilist:21 --episode-number 1 --season 1
+
+      - name: Gemini semantic story
+        run: >
+          python -m animexe episode story workspace/e2e/test-episode.mkv
+          --anime-id anilist:21 --episode-number 1 --season 1 --mode gemini
+
+      - name: Gemini narration script
+        run: >
+          python -m animexe episode script workspace/e2e/test-episode.mkv
+          --anime-id anilist:21 --episode-number 1 --season 1
+
+      - name: Gemini Flash TTS
+        run: >
+          python -m animexe episode tts workspace/e2e/test-episode.mkv
+          --anime-id anilist:21 --episode-number 1 --season 1 --provider gemini
+
+      - name: Match narration to scenes
+        run: >
+          python -m animexe episode match workspace/e2e/test-episode.mkv
+          --anime-id anilist:21 --episode-number 1 --season 1
+
+      - name: Build render timeline
+        run: >
+          python -m animexe episode timeline workspace/e2e/test-episode.mkv
+          --anime-id anilist:21 --episode-number 1 --season 1
+
+      - name: Render final MP4
+        run: >
+          python -m animexe episode render workspace/e2e/test-episode.mkv
+          --anime-id anilist:21 --episode-number 1 --season 1
+
+      - name: Validate rendered output
+        run: |
+          OUTPUT="workspace/output/test-episode.mp4"
+          test -s "$OUTPUT"
+          ffprobe -v error -print_format json -show_streams -show_format "$OUTPUT" > workspace/e2e/final-ffprobe.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("workspace/e2e/final-ffprobe.json").read_text())
+          streams = report.get("streams", [])
+          kinds = {stream.get("codec_type") for stream in streams}
+          if "video" not in kinds:
+              raise SystemExit("final output has no video stream")
+          if "audio" not in kinds:
+              raise SystemExit("final output has no narration audio stream")
+          duration = float((report.get("format") or {}).get("duration") or 0)
+          if duration < 15:
+              raise SystemExit(f"final output is unexpectedly short: {duration:.2f}s")
+          print(f"Final output validated: {duration:.2f}s")
+          PY
+
+      - name: Upload full pipeline artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: animexe-full-pipeline-smoke
+          path: |
+            workspace/e2e
+            workspace/analysis
+            workspace/narration
+            workspace/output/*.mp4
+          if-no-files-found: error
+          retention-days: 7
