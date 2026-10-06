@@ -21,12 +21,16 @@ Gemini semantic story understanding
       ↓
 structured story.json
       ↓
-original English/Hinglish narration script
+visual edit plan (exact source clips)
+      ↓
+original English/Hinglish narration script for that cut
       ↓
 future TTS / scene-matching stages
 ```
 
 Gemini receives the transcript plus scene metadata and, when available, representative JPEG frames. The model does not receive the complete source episode in this checkpoint.
+
+Gemini story understanding describes the episode; it does not decide the final narration in isolation. After the story checkpoint, AniMeXe builds a deterministic visual edit plan from the story events and source scenes. Narration generation receives that plan and is explicitly constrained to the selected scene IDs and source intervals.
 
 ## Structured output
 
@@ -88,14 +92,14 @@ Gemini is a semantic analysis provider, not the source of truth for media acquis
 
 ## Narration script
 
-The next layer now consumes the semantic story manifest to generate an original approximately two-minute spoken explanation.
+The next layer consumes the semantic story manifest **and the visual edit plan** to generate an original approximately two-minute spoken explanation for the footage that will actually be shown.
 
 Supported language modes:
 
 - **English:** natural spoken English in Latin script.
 - **Hinglish:** natural Hindi-English speech style in Roman script.
 
-The language is a presentation choice, not part of the semantic story model. The generator preserves event order and maps every body segment to valid story events and scenes.
+The language is a presentation choice, not part of the semantic story model. The generator preserves event order and maps every body segment to story events and scenes selected by the edit plan. It must not narrate unselected events.
 
 The prompt explicitly forbids subtitle-line copying, screenplay formatting, decorative separators, stage directions, and forced English/Hindi mixing. The output is validated locally before it becomes the `script` checkpoint.
 
@@ -107,13 +111,15 @@ The script checkpoint stores:
 - hook and ending scene references;
 - chronological narration segments;
 - story-event references;
+- selected visual edit-plan reference;
 - computed word count and duration;
 - Gemini model identifier.
 
-Run it after the Gemini story checkpoint:
+Run it after the Gemini story and edit-plan checkpoints:
 
 ```bash
 python -m animexe episode story /path/to/episode.mkv --mode gemini
+python -m animexe episode visual-cut /path/to/episode.mkv
 python -m animexe episode script /path/to/episode.mkv
 ```
 
