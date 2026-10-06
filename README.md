@@ -638,7 +638,8 @@ AniMeXe/
 │   ├── PROVIDERS.md
 │   ├── TTS.md
 │   ├── RENDERING.md
-│   └── ROADMAP.md
+│   ├── ROADMAP.md
+│   └── NARRATION.md
 ├── src/
 │   ├── metadata/
 │   ├── providers/
@@ -703,6 +704,11 @@ episode:
 narration:
   style: conversational
   language: hinglish
+  script: roman
+  target_duration_seconds: 120
+  min_duration_seconds: 105
+  max_duration_seconds: 135
+  words_per_minute: 145
   speed: 1.0
 
 video:
@@ -751,11 +757,12 @@ Secrets belong in environment variables or GitHub Actions secrets.
 - Transcript extraction.
 - Scene index.
 
-### Phase 5 — Story engine
+### Phase 5 — Story engine and narration script
 - Episode event extraction.
 - Chronological story representation.
-- Explanation generation.
-- Script validation.
+- Gemini semantic understanding.
+- Original English/Hinglish explanation generation.
+- Script validation and checkpoint persistence.
 
 ### Phase 6 — Voice
 - TTS adapter interface.
