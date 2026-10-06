@@ -479,7 +479,42 @@ python -m animexe episode script /path/to/episode.mkv --language hinglish --scri
 
 The script stage provides provisional narration-timeline anchors. Real TTS durations become authoritative at the next checkpoint.
 
-## 12. Narration and TTS
+### Current narration-script checkpoint
+
+The narration script is generated after semantic story understanding. The same `story.json` can produce either supported narration language without repeating scene or story analysis.
+
+Supported modes:
+
+```text
+english  → Latin script
+hinglish → Roman script
+```
+
+Default configuration targets roughly two minutes:
+
+```yaml
+narration:
+  language: hinglish
+  script: roman
+  target_duration_seconds: 120
+  min_duration_seconds: 105
+  max_duration_seconds: 135
+  words_per_minute: 145
+```
+
+The script checkpoint validates chronology, scene/event references, word-count and duration bounds, formatting artifacts, and obvious exact subtitle copying before saving `workspace/narration/<input-name>/script.json`.
+
+CLI:
+
+```bash
+python -m animexe episode script /path/to/episode.mkv
+python -m animexe episode script /path/to/episode.mkv --language english --script latin
+python -m animexe episode script /path/to/episode.mkv --language hinglish --script roman
+```
+
+TTS remains the next checkpoint; narration timeline anchors are provisional until real audio durations are measured.
+
+### TTS
 
 TTS is a replaceable module.
 
