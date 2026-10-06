@@ -124,20 +124,66 @@ jobs:
           ffprobe -v error -show_entries format=duration             -of default=noprint_wrappers=1:nokey=1 workspace/e2e/test-episode.mkv
 
       - name: Run complete pipeline
-        run: >
+        run: |
+          set -o pipefail
           python -m animexe episode run workspace/e2e/test-episode.mkv
-          --anime-id anilist:21
-          --episode-number 1
-          --season 1
-          | tee workspace/e2e/first-run.json
+            --anime-id anilist:21
+            --episode-number 1
+            --season 1
+            2>&1 | tee workspace/e2e/first-run.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          text = Path("workspace/e2e/first-run.log").read_text(encoding="utf-8")
+          decoder = json.JSONDecoder()
+          for offset, char in enumerate(text):
+              if char != "{":
+                  continue
+              try:
+                  payload, end = decoder.raw_decode(text[offset:])
+              except json.JSONDecodeError:
+                  continue
+              if isinstance(payload, dict) and "output_path" in payload:
+                  Path("workspace/e2e/first-run.json").write_text(
+                      json.dumps(payload, indent=2) + "\n",
+                      encoding="utf-8",
+                  )
+                  break
+          else:
+              raise SystemExit("could not find pipeline JSON result in first-run.log")
+          PY
 
       - name: Resume complete pipeline from checkpoints
-        run: >
+        run: |
+          set -o pipefail
           python -m animexe episode run workspace/e2e/test-episode.mkv
-          --anime-id anilist:21
-          --episode-number 1
-          --season 1
-          | tee workspace/e2e/resume-run.json
+            --anime-id anilist:21
+            --episode-number 1
+            --season 1
+            2>&1 | tee workspace/e2e/resume-run.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          text = Path("workspace/e2e/resume-run.log").read_text(encoding="utf-8")
+          decoder = json.JSONDecoder()
+          for offset, char in enumerate(text):
+              if char != "{":
+                  continue
+              try:
+                  payload, end = decoder.raw_decode(text[offset:])
+              except json.JSONDecodeError:
+                  continue
+              if isinstance(payload, dict) and "resumed" in payload:
+                  Path("workspace/e2e/resume-run.json").write_text(
+                      json.dumps(payload, indent=2) + "\n",
+                      encoding="utf-8",
+                  )
+                  break
+          else:
+              raise SystemExit("could not find pipeline JSON result in resume-run.log")
+          PY
 
       - name: Verify checkpoint recovery
         run: |
