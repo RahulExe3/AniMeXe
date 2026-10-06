@@ -21,7 +21,9 @@ Gemini semantic story understanding
       ↓
 structured story.json
       ↓
-future script / scene-matching stages
+original English/Hinglish narration script
+      ↓
+future TTS / scene-matching stages
 ```
 
 Gemini receives the transcript plus scene metadata and, when available, representative JPEG frames. The model does not receive the complete source episode in this checkpoint.
@@ -84,6 +86,35 @@ A missing key, missing SDK, failed request, empty response, invalid JSON, or sch
 
 Gemini is a semantic analysis provider, not the source of truth for media acquisition and not a replacement for the provider boundary.
 
-## Next step
+## Narration script
 
-The next layer should consume this richer story manifest to generate an original ~2-minute narration script while preserving event order, source-scene references, and the episode's actual ending.
+The next layer now consumes the semantic story manifest to generate an original approximately two-minute spoken explanation.
+
+Supported language modes:
+
+- **English:** natural spoken English in Latin script.
+- **Hinglish:** natural Hindi-English speech style in Roman script.
+
+The language is a presentation choice, not part of the semantic story model. The generator preserves event order and maps every body segment to valid story events and scenes.
+
+The prompt explicitly forbids subtitle-line copying, screenplay formatting, decorative separators, stage directions, and forced English/Hindi mixing. The output is validated locally before it becomes the `script` checkpoint.
+
+The script checkpoint stores:
+- source story reference;
+- language and writing-system mode;
+- target/min/max duration;
+- words-per-minute target;
+- hook and ending scene references;
+- chronological narration segments;
+- story-event references;
+- computed word count and duration;
+- Gemini model identifier.
+
+Run it after the Gemini story checkpoint:
+
+```bash
+python -m animexe episode story /path/to/episode.mkv --mode gemini
+python -m animexe episode script /path/to/episode.mkv
+```
+
+Real TTS audio duration will replace the provisional script timing at the next stage.
