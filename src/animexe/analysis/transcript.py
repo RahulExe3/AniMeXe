@@ -284,6 +284,15 @@ class SubtitleTranscriptExtractor:
         if Path(episode_manifest.input_path).expanduser().resolve() != input_path:
             raise TranscriptError("episode analysis manifest belongs to a different input file")
         if episode_manifest.input_sha256:
+            import hashlib
+
+            digest = hashlib.sha256()
+            with input_path.open("rb") as handle:
+                while chunk := handle.read(1024 * 1024):
+                    digest.update(chunk)
+            if digest.hexdigest() != episode_manifest.input_sha256:
+                raise TranscriptError("episode input fingerprint does not match the analysis manifest")
+        if episode_manifest.input_sha256:
             from hashlib import sha256
 
             digest = sha256()
