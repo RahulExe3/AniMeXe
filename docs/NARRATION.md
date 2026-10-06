@@ -1,6 +1,20 @@
 # Narration Script
 
-AniMeXe separates semantic story understanding from narration language. The story checkpoint is language-neutral; the script checkpoint turns that story into the spoken explanation that the TTS layer will later voice.
+AniMeXe separates semantic story understanding, visual editing, narration language, and voice generation.
+
+The important production rule is:
+
+```text
+story understanding
+      ↓
+visual edit plan
+      ↓
+narration for the exact selected visuals
+      ↓
+TTS
+```
+
+The script is therefore not a generic narration of the whole 23-minute episode. It describes the specific clips that the edit plan says will appear in the final explanation video.
 
 ## Supported languages
 
@@ -17,7 +31,7 @@ The same semantic `story.json` can generate either language. Story analysis is t
 
 ## Duration target
 
-The default target is approximately two minutes:
+The default visual/narration target is approximately two minutes. The edit planner and narration generator share these duration bounds so the planned visual material is sized for the explanation voiceover:
 
 ```yaml
 narration:
@@ -38,6 +52,8 @@ The current implementation is Gemini-backed:
 ```text
 story.json
     ↓
+edit_plan.json
+    ↓
 Gemini narration writer
     ↓
 hook
@@ -49,12 +65,14 @@ ending
 validated script.json
 ```
 
+The edit plan is the visual contract. It supplies the selected event IDs, scene IDs, source intervals, and durations that the narration is allowed to describe.
+
 The generator uses structured JSON output and validates:
 
 - requested language/writing-system pairing;
 - non-empty hook and ending;
-- valid scene IDs;
-- valid story-event IDs;
+- valid scene IDs from the selected edit plan;
+- valid story-event IDs from the selected edit plan;
 - unique segment IDs;
 - chronological segment anchors;
 - word count and duration range;
@@ -85,6 +103,7 @@ It records:
 - computed word count;
 - computed estimated duration;
 - Gemini model;
+- source edit-plan path;
 - checkpoint name.
 
 Segment timing is provisional. It is a planning anchor for scene matching; real TTS audio timing replaces it later.
@@ -113,7 +132,7 @@ python -m animexe episode script /path/to/episode.mkv \
   --script roman
 ```
 
-The command expects an existing story checkpoint and transcript manifest. The transcript is used only as an integrity signal for obvious exact copying; the story manifest remains the narration source of truth.
+The command expects an existing story checkpoint and transcript manifest. The transcript is used only as an integrity signal for obvious exact copying. The semantic story remains the factual source, while the edit plan is the hard boundary for what may be narrated.
 
 ## Episode checkpoint
 
@@ -127,4 +146,6 @@ and stores the manifest path in `script_manifest`.
 
 ## Next stage
 
-The next stage is TTS. It will consume the script segments, generate sentence/segment audio, measure actual duration, and establish the authoritative narration timeline before scene matching.
+The next stage is TTS. It consumes the selected script segments, generates sentence/segment audio, measures actual duration, and establishes the authoritative narration timeline.
+
+Scene matching then remains constrained to the same edit plan, so TTS timing can adjust clip durations without reopening the whole 23-minute episode as a candidate source.
