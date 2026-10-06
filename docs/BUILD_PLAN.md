@@ -295,7 +295,28 @@ YouTube publishing is not required for this milestone.
 
 ## 8. Current implementation status
 
-**Foundation, metadata/provider boundaries, and the first four analysis checkpoints are implemented.**
+**Foundation through the first production render pipeline are implemented.**
+
+Current completed stack:
+- configuration and persistent state foundation;
+- AniList/Jikan metadata;
+- Kuhi, Anivexa, and AniVault catalog/availability adapters;
+- concurrent provider probing via ProviderBroker;
+- ffprobe inspection;
+- scene detection and representative frames;
+- embedded subtitle transcript extraction;
+- Gemini 3.8 Flash semantic story understanding;
+- Gemini 3.8 Flash narration-script generation;
+- synthetic, command, and Gemini 3.8 Flash TTS;
+- narration-to-scene matching;
+- declarative timeline generation;
+- FFmpeg rendering with source-audio mute;
+- optional local BGM with narration ducking;
+- SRT generation/burn-in;
+- ffprobe output validation;
+- one-command resumable episode pipeline;
+- manual provider-smoke and full-pipeline-smoke workflows;
+- PR/manual-only CI with current GitHub Actions runtimes.
 
 Completed in the current implementation slice:
 - Python package;
