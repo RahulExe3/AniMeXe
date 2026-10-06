@@ -9,13 +9,14 @@ from .transcript import (
     TranscriptError,
     TranscriptSegment,
 )
-from .gemini_story import GeminiStoryAnalyzer, GeminiStoryError\nfrom .story import (
+from .story import (
     EpisodeStoryManifest,
     ExtractiveStoryAnalyzer,
     StoryAnalysisError,
     StoryEvent,
     StoryEvidence,
 )
+from .gemini_story import GeminiStoryAnalyzer, GeminiStoryError
 
 __all__ = [
     "EpisodeAnalysisManifest",
@@ -33,4 +34,6 @@ __all__ = [
     "StoryAnalysisError",
     "StoryEvent",
     "StoryEvidence",
+    "GeminiStoryAnalyzer",
+    "GeminiStoryError",
 ]
