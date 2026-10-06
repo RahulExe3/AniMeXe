@@ -6,7 +6,7 @@ AniMeXe treats TTS as a provider boundary. The narration script is the source of
 
 The current implementation includes two backends:
 
-- `synthetic`: deterministic FFmpeg-generated WAV tones for end-to-end pipeline testing. It does not produce speech.
+- `synthetic`: deterministic pure-Python WAV tones for end-to-end pipeline testing. It does not produce speech and does not require FFmpeg.
 - `command`: bridges to an external/local TTS runner without hard-coding a large model into the repository.
 
 A production TTS wrapper can use an open-source engine/model appropriate for the selected language. AI4Bharat documents explicit English, Hindi, and Hinglish TTS support in its Indic-TTS inference package. citeturn538629search3
