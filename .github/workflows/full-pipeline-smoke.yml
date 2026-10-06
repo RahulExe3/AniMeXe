@@ -47,7 +47,7 @@ jobs:
         run: |
           mkdir -p workspace/e2e
           python -m animexe provider status \
-            --output workspace/e2e/provider-health.json
+            > workspace/e2e/provider-health.json
           python -m animexe provider check \
             anilist:21 \
             --episode-number 1 \
