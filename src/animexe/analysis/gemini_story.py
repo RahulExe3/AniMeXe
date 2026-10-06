@@ -434,5 +434,5 @@ class GeminiStoryAnalyzer:
             ending=ending,
             narration_points=narration_points,
             confidence=round(confidence, 3),
-            model=None,
+            model=model,
         )
