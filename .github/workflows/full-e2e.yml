@@ -1,0 +1,238 @@
+name: AniMeXe Full E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      anime_id:
+        description: "Anime identity to probe (AniList ID preferred)"
+        required: true
+        default: "anilist:21"
+      episode:
+        description: "Episode number to probe"
+        required: true
+        default: "1"
+      language:
+        description: "Provider/narration source language"
+        required: true
+        type: choice
+        options:
+          - sub
+          - dub
+        default: sub
+      story_mode:
+        description: "Story engine"
+        required: true
+        type: choice
+        options:
+          - gemini
+          - extractive
+        default: gemini
+      tts_provider:
+        description: "Narration backend"
+        required: true
+        type: choice
+        options:
+          - gemini
+          - synthetic
+        default: gemini
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      KUHI_API_BASE_URL: ${{ vars.KUHI_API_BASE_URL }}
+      ANIVEXA_API_BASE_URL: ${{ vars.ANIVEXA_API_BASE_URL }}
+      ANIVAULT_API_BASE_URL: ${{ vars.ANIVAULT_API_BASE_URL }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install media tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[test]"
+
+      - name: Write E2E configuration
+        run: |
+          cat > config/config.yml <<'YAML'
+          project:
+            name: AniMeXe E2E
+            language: hinglish
+
+          provider:
+            name: kuhi
+            api_base_url: ${KUHI_API_BASE_URL}
+            language: sub
+
+          provider_fallbacks:
+            - name: anivexa
+              api_base_url: ${ANIVEXA_API_BASE_URL}
+              language: sub
+            - name: anivault
+              api_base_url: ${ANIVAULT_API_BASE_URL}
+              language: sub
+
+          llm:
+            provider: gemini
+            model: gemini-3.8-flash
+            api_key_env: GEMINI_API_KEY
+            temperature: 0.2
+            thinking_level: low
+            max_output_tokens: 6000
+            max_frames: 6
+
+          episode:
+            input_mode: local_or_provider
+            scene_detection: true
+            scene_threshold: 18.0
+            scene_min_duration: 0.5
+            scene_frame_width: 480
+            transcript: auto
+
+          narration:
+            style: conversational
+            language: hinglish
+            script: roman
+            target_duration_seconds: 30
+            min_duration_seconds: 24
+            max_duration_seconds: 36
+            words_per_minute: 145
+            speed: 1.0
+
+          tts:
+            provider: synthetic
+            model: gemini-3.8-flash-tts
+            api_key_env: GEMINI_API_KEY
+            voice: Kore
+            style: natural, conversational, expressive YouTube narrator; clear sentence endings; natural pauses; believable Hinglish delivery
+            command: []
+            timeout_seconds: 180
+
+          video:
+            width: 640
+            height: 360
+            fps: 24
+            max_clip_duration: 6
+
+          audio:
+            mute_source: true
+            bgm: false
+            sfx: optional
+
+          subtitles:
+            enabled: true
+            burn_in: true
+
+          publishing:
+            enabled: false
+          YAML
+
+      - name: Probe real providers
+        continue-on-error: true
+        run: |
+          python -m animexe provider status --output workspace/e2e-provider-health.json
+          python -m animexe provider check             "${{ inputs.anime_id }}"             --episode-number "${{ inputs.episode }}"             --language "${{ inputs.language }}"             --output workspace/e2e-provider-report.json
+
+      - name: Create deterministic episode fixture
+        run: |
+          mkdir -p workspace/e2e_fixture
+          cat > workspace/e2e_fixture/test.srt <<'SRT'
+          1
+          00:00:00,000 --> 00:00:03,000
+          A mysterious visitor arrives just as the town prepares for a quiet festival.
+
+          2
+          00:00:03,000 --> 00:00:06,000
+          Nobody knows who he is, but his strange message makes the main character suspicious.
+
+          3
+          00:00:06,000 --> 00:00:09,000
+          Instead of ignoring the warning, the hero follows a clue hidden near the old bridge.
+
+          4
+          00:00:09,000 --> 00:00:12,000
+          There he discovers proof that the visitor was telling the truth about the danger.
+
+          5
+          00:00:12,000 --> 00:00:15,000
+          The group rushes back before sunset and tries to protect everyone without causing panic.
+
+          6
+          00:00:15,000 --> 00:00:18,000
+          The episode ends with the warning confirmed and a new mystery waiting for the next episode.
+          SRT
+
+          ffmpeg -v error             -f lavfi -i "color=c=0x6c5ce7:s=640x360:r=24:d=6"             -f lavfi -i "color=c=0x0984e3:s=640x360:r=24:d=6"             -f lavfi -i "color=c=0xd63031:s=640x360:r=24:d=6"             -filter_complex "              [0:v]drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='SCENE ONE':fontcolor=white:fontsize=42:x=(w-text_w)/2:y=(h-text_h)/2[a];              [1:v]drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='SCENE TWO':fontcolor=white:fontsize=42:x=(w-text_w)/2:y=(h-text_h)/2[b];              [2:v]drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='SCENE THREE':fontcolor=white:fontsize=42:x=(w-text_w)/2:y=(h-text_h)/2[c];              [a][b][c]concat=n=3:v=1:a=0[v]"             -i workspace/e2e_fixture/test.srt             -map "[v]"             -map 3:0             -c:v libx264             -preset ultrafast             -pix_fmt yuv420p             -c:s srt             -metadata:s:s:0 language=eng             -y workspace/e2e_fixture/episode.mkv
+
+      - name: Inspect episode
+        run: |
+          python -m animexe episode inspect workspace/e2e_fixture/episode.mkv             --output workspace/e2e_fixture/analysis.json
+
+      - name: Detect scenes
+        run: |
+          python -m animexe episode scenes workspace/e2e_fixture/episode.mkv             --analysis-manifest workspace/e2e_fixture/analysis.json             --output workspace/e2e_fixture/scenes.json
+
+      - name: Extract transcript
+        run: |
+          python -m animexe episode transcript workspace/e2e_fixture/episode.mkv             --analysis-manifest workspace/e2e_fixture/analysis.json             --scene-manifest workspace/e2e_fixture/scenes.json             --output workspace/e2e_fixture/transcript.json
+
+      - name: Understand story
+        run: |
+          python -m animexe episode story workspace/e2e_fixture/episode.mkv             --analysis-manifest workspace/e2e_fixture/analysis.json             --scene-manifest workspace/e2e_fixture/scenes.json             --transcript-manifest workspace/e2e_fixture/transcript.json             --mode "${{ inputs.story_mode }}"             --output workspace/e2e_fixture/story.json
+
+      - name: Generate narration script
+        run: |
+          python -m animexe episode script workspace/e2e_fixture/episode.mkv             --story-manifest workspace/e2e_fixture/story.json             --transcript-manifest workspace/e2e_fixture/transcript.json             --language hinglish             --script roman             --output workspace/e2e_fixture/script.json
+
+      - name: Generate narration audio
+        run: |
+          python -m animexe episode tts workspace/e2e_fixture/episode.mkv             --script-manifest workspace/e2e_fixture/script.json             --provider "${{ inputs.tts_provider }}"             --output workspace/e2e_fixture/tts.json
+
+      - name: Match narration to scenes
+        run: |
+          python -m animexe episode match workspace/e2e_fixture/episode.mkv             --scene-manifest workspace/e2e_fixture/scenes.json             --tts-manifest workspace/e2e_fixture/tts.json             --output workspace/e2e_fixture/matching.json             --max-clip-duration 6
+
+      - name: Build timeline
+        run: |
+          python -m animexe episode timeline workspace/e2e_fixture/episode.mkv             --matching-manifest workspace/e2e_fixture/matching.json             --tts-manifest workspace/e2e_fixture/tts.json             --output workspace/e2e_fixture/timeline.json
+
+      - name: Render final MP4
+        run: |
+          python -m animexe episode render workspace/e2e_fixture/episode.mkv             --timeline-manifest workspace/e2e_fixture/timeline.json             --tts-dir workspace/e2e_fixture             --output workspace/e2e_fixture/final.mp4
+
+      - name: Final media probe
+        run: |
+          ffprobe -v error -print_format json             -show_streams -show_format             workspace/e2e_fixture/final.mp4 > workspace/e2e_fixture/final-probe.json
+
+      - name: Upload full E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: animexe-full-e2e-${{ github.run_id }}
+          path: |
+            workspace/e2e-provider-health.json
+            workspace/e2e-provider-report.json
+            workspace/e2e_fixture/
+          if-no-files-found: warn
