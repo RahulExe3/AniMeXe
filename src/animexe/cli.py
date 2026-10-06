@@ -29,7 +29,7 @@ from .narration import (
     NarrationScriptError,
     NarrationScriptManifest,
 )
-from .tts import CommandTTSSynthesizer, SyntheticTTSSynthesizer, TTSError
+from .tts import CommandTTSSynthesizer, GeminiTTSSynthesizer, SyntheticTTSSynthesizer, TTSError
 from .matching import MatchError, SceneMatchManifest, SceneMatcher
 from .render import FFmpegRenderer, RenderError, TimelineBuilder, TimelineManifest
 from .paths import ProjectPaths
@@ -179,7 +179,7 @@ def _build_parser() -> argparse.ArgumentParser:
     episode_tts.add_argument("--output", type=Path)
     episode_tts.add_argument(
         "--provider",
-        choices=("synthetic", "command"),
+        choices=("synthetic", "command", "gemini"),
         default=None,
         help="TTS backend (default: configured tts.provider)",
     )
@@ -831,6 +831,13 @@ def main() -> None:
                 if provider == "synthetic":
                     synthesizer = SyntheticTTSSynthesizer(
                         words_per_minute=app_config.narration.words_per_minute,
+                    )
+                elif provider == "gemini":
+                    synthesizer = GeminiTTSSynthesizer(
+                        model=app_config.tts.model,
+                        api_key_env=app_config.tts.api_key_env,
+                        voice=app_config.tts.voice or "Kore",
+                        style=app_config.tts.style,
                     )
                 else:
                     synthesizer = CommandTTSSynthesizer(
