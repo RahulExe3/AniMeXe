@@ -145,3 +145,32 @@ def test_scene_manifest_round_trips(tmp_path: Path) -> None:
     loaded = SceneAnalysisManifest.read(path)
 
     assert loaded == manifest
+
+def test_scene_indexer_rejects_stale_input_fingerprint(
+    tmp_path: Path,
+) -> None:
+    episode = tmp_path / "episode.mkv"
+    episode.write_bytes(b"changed media")
+
+    manifest = EpisodeAnalysisManifest(
+        schema_version=1,
+        episode_id="demo-s1-e1",
+        input_path=str(episode.resolve()),
+        input_size_bytes=10,
+        input_sha256="1d9291e53a29732dbb47911e9ad50757758a42771a6a15c64fe0a823b3500683",
+        inspected_at="2026-10-06T00:00:00+00:00",
+        ffprobe_version="ffprobe version 7",
+        format_name="matroska",
+        format_long_name="Matroska",
+        duration_seconds=9.0,
+        start_time_seconds=0.0,
+        bit_rate=1000,
+    )
+
+    with pytest.raises(SceneDetectionError, match="fingerprint"):
+        SceneIndexer(ffmpeg_binary="ffmpeg").index(
+            episode,
+            output_dir=tmp_path / "analysis",
+            episode_manifest=manifest,
+            extract_frames=False,
+        )
