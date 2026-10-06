@@ -138,10 +138,10 @@ jobs:
       - name: Run complete pipeline
         run: |
           set -o pipefail
-          python -m animexe episode run workspace/e2e/test-episode.mkv
-            --anime-id anilist:21
-            --episode-number 1
-            --season 1
+          python -m animexe episode run workspace/e2e/test-episode.mkv \
+            --anime-id anilist:21 \
+            --episode-number 1 \
+            --season 1 \
             2>&1 | tee workspace/e2e/first-run.log
           python - <<'PY'
           import json
@@ -169,10 +169,10 @@ jobs:
       - name: Resume complete pipeline from checkpoints
         run: |
           set -o pipefail
-          python -m animexe episode run workspace/e2e/test-episode.mkv
-            --anime-id anilist:21
-            --episode-number 1
-            --season 1
+          python -m animexe episode run workspace/e2e/test-episode.mkv \
+            --anime-id anilist:21 \
+            --episode-number 1 \
+            --season 1 \
             2>&1 | tee workspace/e2e/resume-run.log
           python - <<'PY'
           import json
