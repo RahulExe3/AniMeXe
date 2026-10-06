@@ -16,6 +16,9 @@ jobs:
     timeout-minutes: 20
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      KUHI_API_BASE_URL: ${{ vars.KUHI_API_BASE_URL }}
+      ANIVEXA_API_BASE_URL: ${{ vars.ANIVEXA_API_BASE_URL }}
+      ANIVAULT_API_BASE_URL: ${{ vars.ANIVAULT_API_BASE_URL }}
 
     steps:
       - name: Check out repository
@@ -39,6 +42,17 @@ jobs:
       - name: Install project
         run: python -m pip install --upgrade pip && python -m pip install .
 
+      - name: Probe configured providers
+        continue-on-error: true
+        run: |
+          mkdir -p workspace/e2e
+          python -m animexe provider status \
+            --output workspace/e2e/provider-health.json
+          python -m animexe provider check \
+            anilist:21 \
+            --episode-number 1 \
+            --language sub \
+            --output workspace/e2e/provider-report.json
       - name: Validate Gemini secret presence
         run: |
           test -n "$GEMINI_API_KEY" || {
