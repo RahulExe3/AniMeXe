@@ -446,23 +446,21 @@ class GeminiStoryAnalyzer:
             return Path(configured).expanduser()
         return Path.cwd() / "workspace" / "cache" / "gemini" / "story"
 
-    @staticmethod
-    def _cache_key(prompt: str, scenes: SceneAnalysisManifest, model: str) -> str:
+    def _cache_key(self, prompt: str, scenes: SceneAnalysisManifest, model: str) -> str:
         payload = {
             "version": STORY_CACHE_VERSION,
             "model": model,
             "prompt": prompt,
             "input_sha256": scenes.input_sha256,
-            "max_frames": len(
-                [scene for scene in scenes.scenes if scene.representative_frame]
-            ) if scenes.scenes else 0,
-            "thinking_level": "configured",
+            "max_frames": self.max_frames,
+            "thinking_level": self.thinking_level,
+            "max_output_tokens": self.max_output_tokens,
+            "temperature": self.temperature,
         }
         return hashlib.sha256(
             json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
         ).hexdigest()
 
-    @classmethod
     def _load_cached_response(
         cls,
         prompt: str,
@@ -471,9 +469,9 @@ class GeminiStoryAnalyzer:
         model_candidates: list[str],
         scene_manifest_dir: Path | None,
     ) -> tuple[str, str] | None:
-        root = cls._cache_root(scene_manifest_dir)
+        root = self._cache_root(scene_manifest_dir)
         for model in model_candidates:
-            path = root / f"{cls._cache_key(prompt, scenes, model)}.json"
+            path = root / f"{self._cache_key(prompt, scenes, model)}.json"
             try:
                 payload = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError, TypeError):
@@ -484,7 +482,6 @@ class GeminiStoryAnalyzer:
                 return text, cached_model
         return None
 
-    @classmethod
     def _save_cached_response(
         cls,
         prompt: str,
@@ -494,8 +491,8 @@ class GeminiStoryAnalyzer:
         text: str,
         scene_manifest_dir: Path | None,
     ) -> None:
-        root = cls._cache_root(scene_manifest_dir)
-        path = root / f"{cls._cache_key(prompt, scenes, model)}.json"
+        root = self._cache_root(scene_manifest_dir)
+        path = root / f"{self._cache_key(prompt, scenes, model)}.json"
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             tmp = path.with_suffix(".tmp")
