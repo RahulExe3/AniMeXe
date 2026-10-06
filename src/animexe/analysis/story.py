@@ -64,6 +64,12 @@ class EpisodeStoryManifest:
     ending_event_id: str | None = None
     continuity_notes: tuple[str, ...] = ()
     checkpoint: str = "story"
+    summary: str = ""
+    relationships: tuple[str, ...] = ()
+    ending: str = ""
+    narration_points: tuple[str, ...] = ()
+    confidence: float | None = None
+    model: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -79,6 +85,12 @@ class EpisodeStoryManifest:
             "ending_event_id": self.ending_event_id,
             "continuity_notes": list(self.continuity_notes),
             "checkpoint": self.checkpoint,
+            "summary": self.summary,
+            "relationships": list(self.relationships),
+            "ending": self.ending,
+            "narration_points": list(self.narration_points),
+            "confidence": self.confidence,
+            "model": self.model,
         }
 
     def write(self, path: Path) -> None:
@@ -111,6 +123,8 @@ class EpisodeStoryManifest:
             for item in payload.get("events", [])
         )
         payload["continuity_notes"] = tuple(payload.get("continuity_notes", []))
+        payload["relationships"] = tuple(payload.get("relationships", []))
+        payload["narration_points"] = tuple(payload.get("narration_points", []))
         return cls(**payload)
 
 
@@ -164,7 +178,7 @@ class ExtractiveStoryAnalyzer:
         )
 
         return EpisodeStoryManifest(
-            schema_version=1,
+            schema_version=2,
             episode_id=transcript.episode_id or scenes.episode_id,
             input_path=transcript.input_path,
             input_sha256=transcript.input_sha256 or scenes.input_sha256,
