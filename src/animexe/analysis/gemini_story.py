@@ -151,6 +151,7 @@ class GeminiStoryAnalyzer:
             scenes,
             source_transcript=source_transcript,
             source_scenes=source_scenes,
+            model=self.model,
         )
 
     def _client_or_create(self) -> _ResponseClient:
@@ -306,6 +307,7 @@ class GeminiStoryAnalyzer:
         *,
         source_transcript: str,
         source_scenes: str,
+        model: str,
     ) -> EpisodeStoryManifest:
         if not isinstance(payload, dict):
             raise GeminiStoryError("Gemini story response must be a JSON object")
