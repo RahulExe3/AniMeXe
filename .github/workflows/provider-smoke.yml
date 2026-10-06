@@ -65,19 +65,11 @@ jobs:
 
       - name: Upload provider reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: provider-smoke-report-${{ inputs.anime_id }}-ep${{ inputs.episode }}-${{ inputs.language }}
           path: |
             provider-health.json
             provider-report.json
           if-no-files-found: warn
-          --output workspace/provider-smoke/provider-report.json
-
-      - name: Upload provider report
-        uses: actions/upload-artifact@v7
-        with:
-          name: provider-smoke-report
-          path: workspace/provider-smoke/provider-report.json
-          if-no-files-found: error
           retention-days: 7
