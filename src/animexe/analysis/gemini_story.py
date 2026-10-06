@@ -462,7 +462,7 @@ class GeminiStoryAnalyzer:
         ).hexdigest()
 
     def _load_cached_response(
-        cls,
+        self,
         prompt: str,
         *,
         scenes: SceneAnalysisManifest,
@@ -483,7 +483,7 @@ class GeminiStoryAnalyzer:
         return None
 
     def _save_cached_response(
-        cls,
+        self,
         prompt: str,
         *,
         scenes: SceneAnalysisManifest,
