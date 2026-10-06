@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
+import time
+
+import requests
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -123,24 +127,32 @@ class GeminiStoryAnalyzer:
         self._validate_inputs(transcript, scenes)
 
         prompt = self._build_prompt(transcript, scenes)
-        contents: list[Any] = [prompt]
-        contents.extend(
-            self._frame_parts(
-                scenes,
-                scene_manifest_dir=scene_manifest_dir,
-            )
-        )
 
         try:
-            response = self._client_or_create().models.generate_content(
-                model=self.model,
-                contents=contents,
-                config=self._generation_config(),
-            )
+            if self._client is not None:
+                contents: list[Any] = [prompt]
+                contents.extend(
+                    self._frame_parts(
+                        scenes,
+                        scene_manifest_dir=scene_manifest_dir,
+                    )
+                )
+                response = self._client.models.generate_content(
+                    model=self.model,
+                    contents=contents,
+                    config=self._generation_config(),
+                )
+                text = getattr(response, "text", None)
+                used_model = self.model
+            else:
+                text, used_model = self._rest_generate(
+                    prompt,
+                    scenes,
+                    scene_manifest_dir=scene_manifest_dir,
+                )
         except Exception as exc:
             raise GeminiStoryError(f"Gemini story request failed: {exc}") from exc
 
-        text = getattr(response, "text", None)
         if not isinstance(text, str) or not text.strip():
             raise GeminiStoryError("Gemini returned an empty story response")
 
@@ -155,10 +167,10 @@ class GeminiStoryAnalyzer:
             scenes,
             source_transcript=source_transcript,
             source_scenes=source_scenes,
-            model=self.model,
+            model=used_model,
         )
 
-    def _client_or_create(self) -> _ResponseClient:
+    def _rest_generate(self) -> _ResponseClient:
         if self._client is not None:
             return self._client
 
