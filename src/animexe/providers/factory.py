@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..config import AppConfig
+from .anivault import AnivaultProvider
+from .anivexa import AnivexaProvider
 from .kuhi import KuhiProvider
 from .local import LocalProvider
 from .registry import ProviderRegistry
@@ -13,8 +15,19 @@ def build_registry(config: AppConfig, project_root: Path) -> ProviderRegistry:
     registry = ProviderRegistry()
     registry.register(LocalProvider(project_root))
 
-    api_base_url = config.provider.api_base_url
-    if api_base_url:
-        registry.register(KuhiProvider(api_base_url))
+    configured = [config.provider, *config.provider_fallbacks]
+    for provider_config in configured:
+        if not provider_config.api_base_url:
+            continue
+        name = provider_config.name.strip().lower()
+        if name == "kuhi":
+            provider = KuhiProvider(provider_config.api_base_url)
+        elif name == "anivexa":
+            provider = AnivexaProvider(provider_config.api_base_url)
+        elif name == "anivault":
+            provider = AnivaultProvider(provider_config.api_base_url)
+        else:
+            continue
+        registry.register(provider)
 
     return registry
