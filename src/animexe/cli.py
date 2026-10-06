@@ -33,6 +33,7 @@ from .tts import CommandTTSSynthesizer, SyntheticTTSSynthesizer, TTSError
 from .matching import MatchError, SceneMatchManifest, SceneMatcher
 from .render import FFmpegRenderer, RenderError, TimelineBuilder, TimelineManifest
 from .paths import ProjectPaths
+from .providers import ProviderBroker, build_registry
 from .scheduler import Scheduler
 from .state import StateStore
 
@@ -224,6 +225,14 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="do not burn narration subtitles into the video",
     )
+
+    providers = sub.add_parser("provider", help="inspect configured episode providers")
+    provider_sub = providers.add_subparsers(dest="provider_command", required=True)
+    provider_sub.add_parser("status", help="check health of every configured provider")
+    provider_check = provider_sub.add_parser("check", help="probe one episode across configured providers")
+    provider_check.add_argument("anime_id", help="provider-independent anime id, e.g. anilist:21")
+    provider_check.add_argument("--episode-number", type=int, required=True)
+    provider_check.add_argument("--language", choices=("sub", "dub"), default="sub")
 
     sub.add_parser("plan", help="show the scheduler's next job plan")
 
@@ -1123,6 +1132,55 @@ def main() -> None:
                     "timeline_manifest_path": str(timeline_path),
                 }
             )
+            return
+
+    if args.command == "provider":
+        config_path = paths.config / "config.yml"
+        if not config_path.exists():
+            config_path = paths.config / "config.example.yml"
+        app_config = load_config(config_path)
+        registry = build_registry(app_config, paths.root)
+
+        if args.provider_command == "status":
+            result = []
+            for name in registry.names():
+                provider = registry.get(name)
+                health = provider.check_health()
+                result.append({
+                    "provider": health.provider,
+                    "status": health.status,
+                    "checked_at": health.checked_at,
+                    "detail": health.detail,
+                })
+            _print_json(result)
+            return
+
+        if args.provider_command == "check":
+            if args.episode_number < 1:
+                parser.error("--episode-number must be >= 1")
+            broker = ProviderBroker(registry)
+            probes = broker.probe_episode(
+                args.anime_id,
+                args.episode_number,
+                language=args.language,
+            )
+            selected = broker.best_catalog_provider(probes)
+            _print_json({
+                "probes": [
+                    {
+                        "provider": item.provider,
+                        "score": round(item.score, 3),
+                        "elapsed_ms": round(item.elapsed_ms, 1),
+                        "catalog_available": item.catalog_available,
+                        "availability": (
+                            None if item.availability is None else item.availability.__dict__
+                        ),
+                        "error": item.error,
+                    }
+                    for item in probes
+                ],
+                "selected_catalog_provider": None if selected is None else selected.provider,
+            })
             return
 
     if args.command == "plan":
