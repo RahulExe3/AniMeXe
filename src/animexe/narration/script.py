@@ -245,6 +245,7 @@ class GeminiNarrationScriptGenerator:
         script: str = "roman",
         style: str = "conversational",
         source_story: str = "story.json",
+        source_edit_plan: str | None = None,
     ) -> NarrationScriptManifest:
         language = language.strip().lower()
         script = script.strip().lower()
@@ -331,7 +332,7 @@ class GeminiNarrationScriptGenerator:
             script=script,
             style=style,
             source_story=source_story,
-            source_edit_plan=(str(edit_plan.source_story) if edit_plan is not None else None),
+            source_edit_plan=source_edit_plan,
             model=used_model,
         )
 
