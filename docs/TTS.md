@@ -4,12 +4,13 @@ AniMeXe treats TTS as a provider boundary. The narration script is the source of
 
 ## Backends
 
-The current implementation includes two backends:
+The current implementation includes three backends:
 
+- `gemini`: production natural-language narration using Gemini 3.8 Flash TTS.
 - `synthetic`: deterministic pure-Python WAV tones for end-to-end pipeline testing. It does not produce speech and does not require FFmpeg.
 - `command`: bridges to an external/local TTS runner without hard-coding a large model into the repository.
 
-A production TTS wrapper can use an open-source engine/model appropriate for the selected language. AI4Bharat documents explicit English, Hindi, and Hinglish TTS support in its Indic-TTS inference package. citeturn538629search3
+A production TTS wrapper can also use an open-source engine/model appropriate for the selected language. For the managed Gemini backend, Gemini 3.8 Flash TTS is the flagship current model and supports single-speaker TTS with turn-level `speech_metadata.style`; unary generation returns a WAV file directly. citeturn845316search0turn162182search1
 
 ## Configuration
 
@@ -17,11 +18,15 @@ The default test backend is:
 
 ```yaml
 tts:
-  provider: synthetic
-  voice: null
-  command: []
+  provider: gemini
+  model: gemini-3.8-flash-tts
+  api_key_env: GEMINI_API_KEY
+  voice: Kore
+  style: natural, conversational, expressive YouTube narrator; clear sentence endings; natural pauses; believable Hinglish delivery
   timeout_seconds: 180
 ```
+
+Gemini TTS models detect the input language automatically. Gemini 3.8 Flash TTS supports more than 130 languages, including Hindi and English, and the prebuilt voice catalog includes options such as Kore, Puck, Charon, and many others. citeturn595477view0turn845316search0
 
 For a real local/external engine:
 
@@ -83,6 +88,10 @@ python -m animexe episode tts /path/to/episode.mkv \
 ```
 
 The TTS stage consumes the previously generated `script.json`. No new story or script generation happens here.
+
+### Gemini TTS behavior
+
+AniMeXe sends each hook/body/ending segment as a separate TTS request so measured durations can drive the editing timeline. The narration text remains the transcript; sustained tone/prosody instructions stay in `speech_metadata.style`, which matches the current Gemini 3.8 TTS guidance. citeturn595477view0
 
 ## Next stage
 
