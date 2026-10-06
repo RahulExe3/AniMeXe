@@ -1,5 +1,5 @@
 from animexe.analysis.scenes import SceneAnalysisManifest, SceneRecord
-from animexe.tts import TTSAggregateError if False else TTSManifest, TTSSegment
+from animexe.tts import TTSManifest, TTSSegment
 from animexe.matching import SceneMatcher
 
 
