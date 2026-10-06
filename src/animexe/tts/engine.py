@@ -216,11 +216,15 @@ class CommandTTSSynthesizer:
         command: tuple[str, ...],
         *,
         voice: str | None = None,
+        timeout_seconds: int = 180,
     ) -> None:
         if not command:
             raise ValueError("TTS command cannot be empty")
+        if timeout_seconds < 1:
+            raise ValueError("TTS command timeout must be positive")
         self.command = command
         self.voice = voice
+        self.timeout_seconds = timeout_seconds
 
     def synthesize(
         self,
@@ -262,7 +266,7 @@ class CommandTTSSynthesizer:
                 list(command),
                 capture_output=True,
                 text=True,
-                timeout=180,
+                timeout=self.timeout_seconds,
                 check=False,
             )
             if completed.returncode != 0:
