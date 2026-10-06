@@ -21,6 +21,7 @@ from .analysis import (
     GeminiStoryError,
 )
 from .config import load_config
+from .editing import EditPlanError, EditPlanManifest, EditPlanner
 from .logging import configure_logging
 from .metadata import MetadataLibrary, MetadataService
 from .models import AnimeRecord, EpisodeRecord
@@ -31,7 +32,7 @@ from .narration import (
 )
 from .tts import CommandTTSSynthesizer, GeminiTTSSynthesizer, SyntheticTTSSynthesizer, TTSError
 from .matching import MatchError, SceneMatchManifest, SceneMatcher
-from .render import FFmpegRenderer, RenderError, TimelineBuilder, TimelineManifest
+from .render import FFmpegRenderer, RenderError, TimelineBuilder, TimelineManifest, VisualCutError, VisualCutRenderer
 from .paths import ProjectPaths
 from .pipeline import EpisodePipeline, PipelineError
 from .providers import ProviderBroker, build_registry
@@ -151,6 +152,20 @@ def _build_parser() -> argparse.ArgumentParser:
         default="extractive",
         help="story analysis backend (default: extractive)",
     )
+
+    episode_visual_cut = episode_sub.add_parser(
+        "visual-cut",
+        help="select important scenes and render a narration-free visual cut",
+    )
+    episode_visual_cut.add_argument("input_path", type=Path)
+    episode_visual_cut.add_argument("--story-manifest", type=Path)
+    episode_visual_cut.add_argument("--scene-manifest", type=Path)
+    episode_visual_cut.add_argument("--output", type=Path)
+    episode_visual_cut.add_argument("--edit-plan", type=Path)
+    episode_visual_cut.add_argument("--target-duration-seconds", type=float, default=None)
+    episode_visual_cut.add_argument("--min-duration-seconds", type=float, default=None)
+    episode_visual_cut.add_argument("--max-duration-seconds", type=float, default=None)
+    episode_visual_cut.add_argument("--max-clip-duration", type=float, default=None)
 
     episode_script = episode_sub.add_parser(
         "script",
@@ -694,6 +709,109 @@ def main() -> None:
                     "scene_manifest_path": str(scene_path),
                     "transcript_manifest_path": str(transcript_path),
                     "story_manifest_path": str(output_path),
+                }
+            )
+            return
+
+    if args.command == "episode":
+        if args.episode_command == "visual-cut":
+            story_path = args.story_manifest or (
+                paths.workspace
+                / "analysis"
+                / args.input_path.stem
+                / "story.json"
+            )
+            scene_path = args.scene_manifest or (
+                paths.workspace
+                / "analysis"
+                / args.input_path.stem
+                / "scenes.json"
+            )
+            plan_path = args.edit_plan or (
+                paths.workspace
+                / "analysis"
+                / args.input_path.stem
+                / "edit_plan.json"
+            )
+            output_path = args.output or (
+                paths.workspace
+                / "output"
+                / f"{args.input_path.stem}-visual-cut.mp4"
+            )
+
+            try:
+                story_manifest = EpisodeStoryManifest.read(story_path)
+                scene_manifest = SceneAnalysisManifest.read(scene_path)
+            except (OSError, ValueError, TypeError, KeyError) as exc:
+                parser.error(f"could not read story/scene manifests: {exc}")
+
+            config_path = paths.config / "config.yml"
+            if not config_path.exists():
+                config_path = paths.config / "config.example.yml"
+            app_config = load_config(config_path)
+
+            target = (
+                args.target_duration_seconds
+                if args.target_duration_seconds is not None
+                else app_config.narration.target_duration_seconds
+            )
+            minimum = (
+                args.min_duration_seconds
+                if args.min_duration_seconds is not None
+                else app_config.narration.min_duration_seconds
+            )
+            maximum = (
+                args.max_duration_seconds
+                if args.max_duration_seconds is not None
+                else app_config.narration.max_duration_seconds
+            )
+            max_clip = (
+                args.max_clip_duration
+                if args.max_clip_duration is not None
+                else app_config.video.max_clip_duration
+            )
+
+            try:
+                if plan_path.exists():
+                    plan = EditPlanManifest.read(plan_path)
+                    if plan.input_path != str(args.input_path.expanduser().resolve()):
+                        parser.error("existing edit plan belongs to a different input")
+                    if plan.input_sha256 and story_manifest.input_sha256 and plan.input_sha256 != story_manifest.input_sha256:
+                        parser.error("existing edit plan fingerprint does not match the story")
+                else:
+                    plan = EditPlanner(
+                        target_duration_seconds=target,
+                        min_duration_seconds=minimum,
+                        max_duration_seconds=maximum,
+                        max_clip_duration_seconds=max_clip,
+                    ).plan(
+                        story_manifest,
+                        scene_manifest,
+                        source_story=str(story_path),
+                        source_scenes=str(scene_path),
+                    )
+                    plan.write(plan_path)
+                VisualCutRenderer(
+                    width=app_config.video.width,
+                    height=app_config.video.height,
+                    fps=app_config.video.fps,
+                ).render(
+                    args.input_path,
+                    plan,
+                    output_path=output_path,
+                )
+            except (EditPlanError, VisualCutError) as exc:
+                parser.error(str(exc))
+
+            _print_json(
+                {
+                    "input_path": str(args.input_path.expanduser().resolve()),
+                    "story_manifest_path": str(story_path),
+                    "scene_manifest_path": str(scene_path),
+                    "edit_plan_path": str(plan_path),
+                    "visual_cut_path": str(output_path),
+                    "total_duration_seconds": plan.total_duration_seconds,
+                    "selected_scene_ids": list(plan.scene_ids),
                 }
             )
             return
