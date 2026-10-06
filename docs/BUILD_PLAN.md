@@ -307,5 +307,6 @@ Completed in the current implementation slice:
 - schema-versioned episode analysis manifests;
 - persisted episode inspection checkpoints;
 - episode inspection tests.
+- PySceneDetect scene indexing with representative-frame extraction and fingerprint validation.
 
 Next implementation slice: **transcript extraction aligned to the scene index**.
