@@ -264,8 +264,7 @@ workspace/analysis/<input-name>/
 └── frames/
 ```
 
-The story manifest references the transcript and scene manifests used to build it. The next implementation slice is an LLM-backed story explainer that converts this evidence into a structured episode summary suitable for original narration-script generation.
-
+The story manifest references the transcript and scene manifests used to build it.
 
 ## Current Gemini semantic story checkpoint
 
