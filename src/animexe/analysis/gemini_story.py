@@ -161,6 +161,8 @@ class GeminiStoryAnalyzer:
         except json.JSONDecodeError as exc:
             raise GeminiStoryError("Gemini returned invalid JSON") from exc
 
+        payload = self._unwrap_story_payload(payload)
+
         return self._manifest_from_payload(
             payload,
             transcript,
@@ -429,6 +431,35 @@ class GeminiStoryAnalyzer:
             added += 1
 
         return parts
+
+    @staticmethod
+    def _unwrap_story_payload(payload: Any) -> Any:
+        """Accept the exact story object or a harmless one-key JSON wrapper."""
+        required = {
+            "episode_summary",
+            "characters",
+            "locations",
+            "keywords",
+            "relationships",
+            "events",
+            "ending",
+            "continuity_notes",
+            "narration_points",
+            "confidence",
+        }
+        current = payload
+        for _ in range(2):
+            if not isinstance(current, dict):
+                return current
+            if required.issubset(current):
+                return current
+            if len(current) != 1:
+                return current
+            nested = next(iter(current.values()))
+            if not isinstance(nested, dict):
+                return current
+            current = nested
+        return current
 
     @classmethod
     def _manifest_from_payload(
