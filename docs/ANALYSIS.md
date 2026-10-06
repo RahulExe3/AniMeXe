@@ -215,3 +215,53 @@ workspace/analysis/<input-name>/
 Episodes without an embedded text subtitle track fail this checkpoint with an explicit message rather than silently creating an empty transcript. The transcript layer is intentionally separated from ASR so a future local ASR adapter (for example, a Whisper-family backend) can be added without changing the story engine or state contract.
 
 The next checkpoint is story understanding: combining episode metadata, scene frames, and transcript segments into a structured episode representation.
+
+## Current story checkpoint
+
+The fourth analysis checkpoint is now implemented as a deterministic extractive evidence layer.
+
+Flow:
+
+```text
+input → inspected → scenes → transcript → story
+```
+
+The first story pass does not pretend that keyword extraction is full semantic understanding. It creates a reproducible evidence package containing:
+
+- transcript-derived events with scene IDs and timestamps;
+- a simple importance score based on timing and text density;
+- repeated keyword evidence;
+- conservative capitalized-name evidence for potential characters;
+- the final transcript event as the current ending candidate;
+- continuity notes explicitly identifying the method as extractive.
+
+This gives the later LLM-backed story adapter a stable input/output contract without coupling the rest of AniMeXe to a specific model vendor.
+
+CLI:
+
+```bash
+python -m animexe episode story /path/to/episode.mkv
+```
+
+Attach the story checkpoint to an episode record:
+
+```bash
+python -m animexe episode story /path/to/episode.mkv \
+  --anime-id mal:12345 \
+  --episode-number 4 \
+  --season 1
+```
+
+Output:
+
+```text
+workspace/analysis/<input-name>/
+├── analysis.json
+├── scenes.json
+├── transcript.json
+├── source.srt
+├── story.json
+└── frames/
+```
+
+The story manifest references the transcript and scene manifests used to build it. The next implementation slice is an LLM-backed story explainer that converts this evidence into a structured episode summary suitable for original narration-script generation.
