@@ -5,7 +5,8 @@ AniMeXe will use GitHub Actions as a worker after the local pipeline is stable. 
 ## Modes
 - dry-run: validate configuration, state, scheduler decisions, and workspace creation.
 - analyze: inspect media, detect scenes, process transcripts, and build story analysis.
-- render: run production and upload artifacts.
+- visual-cut: build the semantic edit plan and upload a narration-free visual preview.
+- render: run the complete production pipeline and upload artifacts.
 - scheduled: run the central scheduler up to the configured daily output limit.
 
 Publishing is excluded from the initial workflow.
@@ -34,10 +35,21 @@ Credentials belong in GitHub Actions secrets. Provider URLs, model names, featur
 ## Scheduling gate
 Do not enable production schedules until one local render, one GitHub Actions render, state persistence, checkpoint recovery, and duplicate-job protection have all been verified.
 
-## Manual smoke workflows
+## Current workflows
 
-- `provider-smoke.yml` checks configured provider health/episode catalogs and uploads a JSON provider report.
-- `full-pipeline-smoke.yml` creates a tiny synthetic episode, runs Gemini semantic story understanding, Gemini narration-script generation, Gemini Flash TTS, scene matching, timeline generation, FFmpeg rendering, and final stream validation. It does not require an episode to be stored in Git.
+### `ci.yml`
+
+Runs on pushes to `main`, pull requests targeting `main`, and manual dispatch. It compiles the package and runs the unit-test suite.
+
+### `full-pipeline-smoke.yml`
+
+Manual full-pipeline smoke test. It creates a tiny synthetic episode, runs Gemini semantic story understanding, creates the `edit_plan` checkpoint, generates cut-aware narration, Gemini Flash TTS, constrained scene matching, timeline generation, FFmpeg rendering, checkpoint recovery, and final stream validation. The Gemini response cache is restored/saved around the run.
+
+### `episode-visual-cut.yml`
+
+Manual visual-selection workflow. It analyzes an episode, builds the semantic edit plan, and produces a video-only artifact with no source audio, narration, TTS, BGM, SFX, or subtitles.
+
+Synthetic mode is the CI-safe default. Workspace mode requires the episode file to already be provisioned on the runner.
 
 ## First workflow quality gate
 Verify workflow success, final MP4, video stream, narration audio, subtitles, muted source audio, plausible duration, readable artifacts, exactly-once state advancement, and checkpoint-based retry recovery.
