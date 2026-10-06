@@ -34,5 +34,10 @@ Credentials belong in GitHub Actions secrets. Provider URLs, model names, featur
 ## Scheduling gate
 Do not enable production schedules until one local render, one GitHub Actions render, state persistence, checkpoint recovery, and duplicate-job protection have all been verified.
 
+## Manual smoke workflows
+
+- `provider-smoke.yml` checks configured provider health/episode catalogs and uploads a JSON provider report.
+- `full-pipeline-smoke.yml` creates a tiny synthetic episode, runs Gemini semantic story understanding, Gemini narration-script generation, Gemini Flash TTS, scene matching, timeline generation, FFmpeg rendering, and final stream validation. It does not require an episode to be stored in Git.
+
 ## First workflow quality gate
 Verify workflow success, final MP4, video stream, narration audio, subtitles, muted source audio, plausible duration, readable artifacts, exactly-once state advancement, and checkpoint-based retry recovery.
