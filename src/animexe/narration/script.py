@@ -658,6 +658,7 @@ class GeminiNarrationScriptGenerator:
         style: str,
         source_story: str,
         source_edit_plan: str | None,
+        model: str,
     ) -> NarrationScriptManifest:
         if not isinstance(payload, dict):
             raise NarrationScriptError("Gemini narration response must be a JSON object")
@@ -830,7 +831,7 @@ class GeminiNarrationScriptGenerator:
             word_count=actual_word_count,
             estimated_duration_seconds=round(estimated_duration, 3),
             source_edit_plan=source_edit_plan,
-            model=self.model,
+            model=model,
         )
 
     @staticmethod
