@@ -1,18 +1,15 @@
-"""Real episode acquisition and media materialization."""
+"""Media input boundary for provider/local/authorized sources.
 
-from .acquirer import (
-    MediaAcquisitionError,
-    MediaAcquisitionReport,
-    MediaAcquirer,
-    MediaAttempt,
-)
-from .fetcher import MediaFetchError, MediaFetcher
+The package currently exposes only the stable media-input boundary. Provider-specific
+source extraction must return a normalized MediaSource; AniMeXe does not implement
+DRM bypass, paywall bypass, CAPTCHA evasion, or proxy/decryption workarounds.
+"""
 
-__all__ = [
-    "MediaAcquisitionError",
-    "MediaAcquisitionReport",
-    "MediaAcquirer",
-    "MediaAttempt",
-    "MediaFetchError",
-    "MediaFetcher",
-]
+from ..models import MediaSource
+
+
+class MediaInputError(RuntimeError):
+    """Raised when an authorized media input cannot be accepted."""
+
+
+__all__ = ["MediaInputError", "MediaSource"]
