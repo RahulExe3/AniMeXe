@@ -14,7 +14,7 @@ A production TTS wrapper can also use an open-source engine/model appropriate fo
 
 ## Configuration
 
-The default test backend is:
+The recommended production backend is:
 
 ```yaml
 tts:
