@@ -38,7 +38,14 @@ episode:
 
 narration:
   style: conversational
+  # Supported languages: english, hinglish.
+  # English uses Latin script; Hinglish uses Roman script.
   language: hinglish
+  script: roman
+  target_duration_seconds: 120
+  min_duration_seconds: 105
+  max_duration_seconds: 135
+  words_per_minute: 145
   speed: 1.0
 
 video:
