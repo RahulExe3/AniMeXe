@@ -68,7 +68,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/animexe-download-check"
           OUTPUT="$RUNNER_TEMP/animexe-download-check/episode.mkv"
           echo "Acquiring AniList anime $ANILIST_ID episode $EPISODE_NUMBER (max ${MAX_SIZE_MB} MiB)"
-          python -m animexe.cli episode acquire-animeparadise \
+          python -m animexe episode acquire-animeparadise \
             --anilist-id "$ANILIST_ID" \
             --episode-number "$EPISODE_NUMBER" \
             --output "$OUTPUT" \
