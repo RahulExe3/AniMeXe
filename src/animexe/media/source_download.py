@@ -187,13 +187,21 @@ def _check_unencrypted_hls(
         if not line or line.startswith("#"):
             if line.upper().startswith("#EXT-X-STREAM-INF:"):
                 next_is_variant = True
-            elif line.upper().startswith("#EXT-X-I-FRAME-STREAM-INF:") or line.upper().startswith("#EXT-X-MEDIA:"):
+            elif line.upper().startswith("#EXT-X-MEDIA:"):
+                # Alternate audio/video/subtitle renditions can be required by a
+                # playable variant, so validate their playlist URIs when present.
                 match = _URI_ATTRIBUTE.search(line)
                 if match:
                     candidate = urljoin(final_url, match.group(1))
                     candidate_path = urlsplit(candidate).path.lower()
                     if candidate_path.endswith(".m3u8") or candidate_path == "/m3u8":
                         children.append(candidate)
+            elif line.upper().startswith("#EXT-X-I-FRAME-STREAM-INF:"):
+                # I-frame-only playlists are optional trick-play assets, not media
+                # renditions needed to save the episode. Some relays publish these
+                # references but do not expose a fetchable route for them. Do not
+                # make an otherwise valid video fail preflight on these URLs.
+                continue
             continue
         if next_is_variant:
             children.append(urljoin(final_url, line))

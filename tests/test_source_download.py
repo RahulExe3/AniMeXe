@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from animexe.media.source_download import SourceDownloadError, download_media_source
+from animexe.media.source_download import SourceDownloadError, _check_unencrypted_hls, download_media_source
 
 
 class FakeResponse:
@@ -152,3 +152,43 @@ def test_direct_file_size_limit_is_enforced(monkeypatch, tmp_path: Path):
             tmp_path / "episode.mp4",
             max_bytes=10,
         )
+
+
+def test_hls_preflight_ignores_unavailable_iframe_only_playlist(monkeypatch):
+    master = b"""#EXTM3U
+#EXT-X-VERSION:4
+#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=640x360
+/index-f3-v1-a1.m3u8
+#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=50000,URI="/iframes-f3-v1-a1.m3u8"
+"""
+    media = b"""#EXTM3U
+#EXT-X-VERSION:3
+#EXTINF:6.0,
+segment.ts
+#EXT-X-ENDLIST
+"""
+    root = "https://stream.animeparadise.moe/m3u8?url=opaque-token"
+    variant = "https://stream.animeparadise.moe/index-f3-v1-a1.m3u8"
+    requested = []
+
+    def fake_get(url, **kwargs):
+        requested.append(url)
+        if url == root:
+            return FakeResponse(url=url, content=master)
+        if url == variant:
+            return FakeResponse(url=url, content=media)
+        if "/iframes-f3-v1-a1.m3u8" in url:
+            return FakeResponse(
+                url=url,
+                content=b'{"message":"Route GET:/iframes-f3-v1-a1.m3u8 not found"}',
+                status_code=404,
+            )
+        raise AssertionError(f"Unexpected playlist request: {url}")
+
+    monkeypatch.setattr("animexe.media.source_download.requests.get", fake_get)
+
+    _check_unencrypted_hls(root, {"Referer": "https://animeparadise.moe/"}, 10)
+
+    assert root in requested
+    assert variant in requested
+    assert not any("/iframes-f3-v1-a1.m3u8" in url for url in requested)
