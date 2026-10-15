@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from .analysis import (
@@ -462,7 +463,12 @@ def main() -> None:
                 KeyError,
                 RuntimeError,
             ) as exc:
-                parser.error(str(exc))
+                print(
+                    f"Episode acquisition failed ({type(exc).__name__}): {exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                raise SystemExit(1) from exc
             _print_json(result)
             return
 
