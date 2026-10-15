@@ -56,13 +56,18 @@ jobs:
       - name: Download the complete episode
         id: acquire
         env:
-          ANILIST_ID: ${{ inputs.anilist_id }}
-          EPISODE_NUMBER: ${{ inputs.episode_number }}
-          MAX_SIZE_MB: ${{ inputs.max_size_mb }}
+          # workflow_dispatch inputs are empty on push events, so supply safe defaults.
+          ANILIST_ID: ${{ inputs.anilist_id || '52991' }}
+          EPISODE_NUMBER: ${{ inputs.episode_number || '1' }}
+          MAX_SIZE_MB: ${{ inputs.max_size_mb || '8192' }}
         run: |
           set -euo pipefail
+          : "${ANILIST_ID:?ANILIST_ID must be set}"
+          : "${EPISODE_NUMBER:?EPISODE_NUMBER must be set}"
+          : "${MAX_SIZE_MB:?MAX_SIZE_MB must be set}"
           mkdir -p "$RUNNER_TEMP/animexe-download-check"
           OUTPUT="$RUNNER_TEMP/animexe-download-check/episode.mkv"
+          echo "Acquiring AniList anime $ANILIST_ID episode $EPISODE_NUMBER (max ${MAX_SIZE_MB} MiB)"
           python -m animexe.cli episode acquire-animeparadise \
             --anilist-id "$ANILIST_ID" \
             --episode-number "$EPISODE_NUMBER" \
