@@ -126,7 +126,18 @@ def _request_headers(extra: Mapping[str, str] | None) -> dict[str, str]:
 def _playlist_text(url: str, headers: Mapping[str, str], timeout: int) -> tuple[str, str]:
     try:
         response = requests.get(url, headers=dict(headers), timeout=timeout)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            status = response.status_code
+            # Keep the diagnostic useful without dumping an arbitrary provider page.
+            detail = (response.text or "").strip().replace("\\n", " ")[:180]
+            suffix = f"; response={detail!r}" if detail else ""
+            raise SourceDownloadError(
+                f"Could not read the HLS playlist: HTTP {status}{suffix}"
+            ) from exc
+    except requests.Timeout as exc:
+        raise SourceDownloadError("Timed out while reading the HLS playlist.") from exc
     except requests.RequestException as exc:
         raise SourceDownloadError(f"Could not read the HLS playlist ({type(exc).__name__}).") from exc
     final_url = _validated_url(response.url or url)
