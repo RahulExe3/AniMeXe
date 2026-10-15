@@ -1,0 +1,101 @@
+name: Episode Download Verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      anilist_id:
+        description: AniList anime ID
+        required: true
+        type: string
+        default: "52991"
+      episode_number:
+        description: Episode number to acquire
+        required: true
+        type: string
+        default: "1"
+      max_size_mb:
+        description: Maximum permitted download size in MiB
+        required: true
+        type: choice
+        options:
+          - "2048"
+          - "4096"
+          - "8192"
+        default: "8192"
+
+permissions:
+  contents: read
+
+jobs:
+  download-full-episode:
+    name: Acquire and validate full episode
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out AniMeXe
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install AniMeXe
+        run: python -m pip install --upgrade pip && python -m pip install .
+
+      - name: Install FFmpeg and ffprobe
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
+          ffprobe -version
+
+      - name: Download the complete episode
+        id: acquire
+        env:
+          ANILIST_ID: ${{ inputs.anilist_id }}
+          EPISODE_NUMBER: ${{ inputs.episode_number }}
+          MAX_SIZE_MB: ${{ inputs.max_size_mb }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/animexe-download-check"
+          OUTPUT="$RUNNER_TEMP/animexe-download-check/episode.mkv"
+          python -m animexe.cli episode acquire-animeparadise \
+            --anilist-id "$ANILIST_ID" \
+            --episode-number "$EPISODE_NUMBER" \
+            --output "$OUTPUT" \
+            --timeout 60 \
+            --max-size-mb "$MAX_SIZE_MB" \
+            --authorized-use
+          test -s "$OUTPUT"
+          echo "output=$OUTPUT" >> "$GITHUB_OUTPUT"
+          echo "size_bytes=$(stat -c '%s' "$OUTPUT")" >> "$GITHUB_OUTPUT"
+
+      - name: Verify that the full episode is playable
+        env:
+          EPISODE_FILE: ${{ steps.acquire.outputs.output }}
+        run: |
+          set -euo pipefail
+          DURATION="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$EPISODE_FILE")"
+          VIDEO_STREAMS="$(ffprobe -v error -select_streams v:0 -show_entries stream=index -of csv=p=0 "$EPISODE_FILE" | wc -l)"
+          AUDIO_STREAMS="$(ffprobe -v error -select_streams a:0 -show_entries stream=index -of csv=p=0 "$EPISODE_FILE" | wc -l)"
+          python - "$DURATION" "$VIDEO_STREAMS" "$AUDIO_STREAMS" <<'PY'
+          import sys
+          duration = float(sys.argv[1])
+          video_streams = int(sys.argv[2])
+          audio_streams = int(sys.argv[3])
+          print(f"Detected duration: {duration:.1f} seconds")
+          print(f"Video streams: {video_streams}; audio streams: {audio_streams}")
+          if duration < 600:
+              raise SystemExit("FAIL: media is shorter than 10 minutes; refusing to count a partial clip as a full episode.")
+          if video_streams < 1:
+              raise SystemExit("FAIL: no video stream found.")
+          if audio_streams < 1:
+              raise SystemExit("FAIL: no audio stream found.")
+          print("PASS: downloaded media is episode-length and contains audio/video streams.")
+          PY
+
+      - name: Remove temporary source episode
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/animexe-download-check"
