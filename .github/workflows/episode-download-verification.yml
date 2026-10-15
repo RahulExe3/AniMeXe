@@ -1,6 +1,8 @@
 name: Episode Download Verification
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       anilist_id:
