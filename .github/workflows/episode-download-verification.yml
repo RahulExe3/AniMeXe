@@ -9,7 +9,7 @@ on:
         description: AniList anime ID
         required: true
         type: string
-        default: "52991"
+        default: "154587"
       episode_number:
         description: Episode number to acquire
         required: true
@@ -57,7 +57,7 @@ jobs:
         id: acquire
         env:
           # workflow_dispatch inputs are empty on push events, so supply safe defaults.
-          ANILIST_ID: ${{ inputs.anilist_id || '52991' }}
+          ANILIST_ID: ${{ inputs.anilist_id || '154587' }}
           EPISODE_NUMBER: ${{ inputs.episode_number || '1' }}
           MAX_SIZE_MB: ${{ inputs.max_size_mb || '8192' }}
         run: |
