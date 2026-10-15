@@ -774,3 +774,73 @@ When provider research changes:
 - do not rely on chat history alone.
 
 The purpose of this document is to let future implementation sessions start from the latest verified provider architecture instead of re-discovering old assumptions.
+
+---
+
+## 16. Saving a source from 7xAnime
+
+AniMeXe can now save a **direct video URL** or a **clearly unencrypted HLS playlist** to a local workspace file before analysis. It does not treat an iframe URL as a media file.
+
+The 7xAnime provider map currently divides into:
+
+| 7xAnime provider | Current route type | AniMeXe behavior |
+|---|---|---|
+| AniXo | Embed | Requires a direct media URL; the iframe is rejected |
+| Megavid | Embed | Requires a direct media URL; the iframe is rejected |
+| AnimeParadise | HLS candidate | A direct `stream.animeparadise.moe/m3u8` playlist can be checked and remuxed when it is accessible and unencrypted; actual playback/source availability is not guaranteed |
+| MegaFlix | Embed | Requires a direct media URL; the iframe is rejected |
+| TryEmbed | Embed | Requires a direct media URL; the iframe is rejected |
+| CinexStream | Embed | Requires a direct media URL; the iframe is rejected |
+| NontonGo | Embed | Requires a direct media URL; the iframe is rejected |
+
+This is a **source-saving hand-off**, not an iframe scraper or automatic provider resolver. Provider labels are metadata only: for example, `--source-provider anixo` does not make an AniXo iframe downloadable, and it does not scrape the iframe's internal requests. If the provider only supplies an embedded player page, select another source that explicitly exposes a direct, permitted media URL.
+
+### CLI
+
+```bash
+python -m animexe episode download-source \
+  "https://media.example/episode.m3u8" \
+  --source-provider animeparadise \
+  --referer "https://animeparadise.moe/" \
+  --output workspace/input/source-episode.mkv \
+  --authorized-use
+```
+
+For a direct MP4/MKV/WebM URL, the same command streams the file to disk. HLS uses FFmpeg to remux the stream locally. Requests have a timeout and configurable maximum file size; temporary files are replaced atomically after success.
+
+AniMeXe rejects:
+- iframe/catalog/player pages that are not direct media;
+- DASH manifests;
+- HLS playlists declaring encryption or with ambiguous key signaling;
+- non-HTTP(S) URLs and literal localhost/private IP addresses.
+
+The source's audio is retained in the downloaded file so analysis can still inspect the original media tracks. The existing visual-cut/final-render stages are responsible for producing an explanation video without the episode's original audio; Sub/Dub selection is not required by this saving step.
+
+Only download and process media you have permission to use. The downloader does not bypass DRM, extract hidden player URLs, or defeat provider access controls. A direct URL can still expire or fail, and an HLS URL passing playlist checks is not proof that every segment will be available.
+
+
+## Experimental direct-media acquisition: AnimeParadise
+
+AnimeParadise is the first native-media adapter in AniMeXe. It is opt-in and independent of Kuhi; it uses the site's JSON catalogue flow rather than treating an embed/player URL as media:
+
+1. Search the public JSON catalogue using AniList title variants.
+2. Require a confident, unambiguous series match.
+3. Select the requested integer episode from that series catalogue.
+4. Resolve the selected episode UID through the documented episode endpoint and convert its `streamLink` to the AnimeParadise HLS URL.
+5. Pass that URL and its minimal Referer header to the shared media saver, which rejects encrypted/ambiguous HLS and applies acquisition time and size limits.
+
+The adapter currently exposes **subbed episodes only**. AniMeXe's explanation renderer continues to mute original episode audio. This does not imply that a requested provider episode is available: only a successful, permitted acquisition followed by media inspection establishes that.
+
+Example:
+
+```bash
+animexe episode acquire-animeparadise \
+  --anilist-id 21 \
+  --episode-number 1 \
+  --authorized-use \
+  --output workspace/input/episode-1.mkv
+```
+
+Add `--run-pipeline` to pass the acquired local file to the existing explanation pipeline. The command requires `--authorized-use` and does not print the expiring stream URL in its JSON result. Provider configuration is optional for direct acquisition; set `provider.name: animeparadise` if it should also appear in the configured provider registry/status report.
+
+**Verification status:** resolver behaviour is covered by mocked API contract tests. A successful test run does not prove present-day provider uptime or prove a real episode plays end-to-end; keep the adapter manual/opt-in until a permitted sample is checked with `ffprobe` and a decoded frame.

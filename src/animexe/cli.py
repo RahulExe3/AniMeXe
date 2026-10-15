@@ -24,6 +24,8 @@ from .config import load_config
 from .editing import EditPlanError, EditPlanManifest, EditPlanner
 from .logging import configure_logging
 from .metadata import MetadataLibrary, MetadataService
+from .media.source_download import SEVENX_PROVIDER_MODES, SourceDownloadError, download_media_source
+from .providers.animeparadise import AnimeParadiseError, AnimeParadiseProvider
 from .models import AnimeRecord, EpisodeRecord
 from .narration import (
     GeminiNarrationScriptGenerator,
@@ -90,6 +92,45 @@ def _build_parser() -> argparse.ArgumentParser:
     episode_sub = episode.add_subparsers(dest="episode_command", required=True)
     episode_list = episode_sub.add_parser("list", help="list episodes")
     episode_list.add_argument("--anime-id")
+
+    episode_download = episode_sub.add_parser(
+        "download-source",
+        help="save a permitted direct video file or unencrypted HLS stream for episode analysis",
+    )
+    episode_download.add_argument("media_url", help="direct MP4/MKV/WebM or unencrypted HLS playlist URL (not an embed page)")
+    episode_download.add_argument("--output", type=Path, default=None, help="local episode output path")
+    episode_download.add_argument(
+        "--source-provider",
+        choices=tuple(SEVENX_PROVIDER_MODES),
+        default=None,
+        help="optional 7xAnime provider label; embed-only URLs remain unsupported",
+    )
+    episode_download.add_argument("--referer", default=None, help="Referer header when legitimately required by the media host")
+    episode_download.add_argument("--user-agent", default=None, help="optional User-Agent header")
+    episode_download.add_argument("--timeout", type=int, default=60, help="request timeout in seconds (default: 60)")
+    episode_download.add_argument("--max-size-mb", type=int, default=8192, help="maximum saved media size in MiB (default: 8192)")
+    episode_download.add_argument(
+        "--authorized-use",
+        action="store_true",
+        help="confirm you have permission to download and process this media",
+    )
+
+    episode_acquire = episode_sub.add_parser(
+        "acquire-animeparadise",
+        help="resolve an AniList episode through AnimeParadise and acquire its HLS media",
+    )
+    episode_acquire.add_argument("--anilist-id", type=int, required=True)
+    episode_acquire.add_argument("--episode-number", type=int, required=True)
+    episode_acquire.add_argument("--season", type=int, default=1)
+    episode_acquire.add_argument("--output", type=Path, default=None, help="destination for the acquired episode")
+    episode_acquire.add_argument("--timeout", type=int, default=60, help="media acquisition timeout in seconds")
+    episode_acquire.add_argument("--max-size-mb", type=int, default=8192, help="maximum output size in MiB")
+    episode_acquire.add_argument("--run-pipeline", action="store_true", help="run the existing explanation pipeline after acquisition")
+    episode_acquire.add_argument(
+        "--authorized-use",
+        action="store_true",
+        help="confirm you have permission to download and process this media",
+    )
 
     episode_inspect = episode_sub.add_parser(
         "inspect",
@@ -358,6 +399,96 @@ def main() -> None:
             return
 
     if args.command == "episode":
+        if args.episode_command == "acquire-animeparadise":
+            if not args.authorized_use:
+                parser.error("Confirm you have permission to download and process this media by passing --authorized-use.")
+            if args.anilist_id < 1:
+                parser.error("--anilist-id must be a positive integer")
+            if args.episode_number < 1:
+                parser.error("--episode-number must be >= 1")
+            if args.season < 1:
+                parser.error("--season must be >= 1")
+            if args.timeout < 1 or args.max_size_mb < 1:
+                parser.error("--timeout and --max-size-mb must be positive")
+
+            config_path = paths.config / "config.yml"
+            if not config_path.exists():
+                config_path = paths.config / "config.example.yml"
+            try:
+                app_config = load_config(config_path)
+                metadata_service = MetadataService.create(
+                    anilist_endpoint=app_config.metadata.anilist_endpoint,
+                    jikan_base_url=app_config.metadata.jikan_base_url,
+                )
+                metadata = metadata_service.get_anime("anilist", args.anilist_id)
+                source = AnimeParadiseProvider().resolve_anilist_episode(
+                    metadata,
+                    args.episode_number,
+                )
+                output_path = args.output or (
+                    paths.workspace
+                    / "input"
+                    / f"anilist-{args.anilist_id}-s{args.season}-e{args.episode_number}.mkv"
+                )
+                result = download_media_source(
+                    source.reference,
+                    output_path,
+                    source_provider="animeparadise",
+                    headers=dict(source.headers),
+                    timeout_seconds=args.timeout,
+                    max_bytes=args.max_size_mb * 1024 * 1024,
+                )
+                if args.run_pipeline:
+                    pipeline_result = EpisodePipeline(paths, app_config).run(
+                        Path(str(result["output_path"])),
+                        anime_id=f"anilist:{args.anilist_id}",
+                        episode_number=args.episode_number,
+                        season=args.season,
+                    )
+                    result["pipeline_result"] = pipeline_result.to_dict()
+                result["anime"] = {
+                    "anilist_id": args.anilist_id,
+                    "title": metadata.title,
+                    "episode_number": args.episode_number,
+                    "season": args.season,
+                }
+            except (
+                AnimeParadiseError,
+                SourceDownloadError,
+                PipelineError,
+                OSError,
+                ValueError,
+                TypeError,
+                KeyError,
+                RuntimeError,
+            ) as exc:
+                parser.error(str(exc))
+            _print_json(result)
+            return
+
+        if args.episode_command == "download-source":
+            if not args.authorized_use:
+                parser.error("Confirm you have permission to download and process this media by passing --authorized-use.")
+            headers = {}
+            if args.referer:
+                headers["Referer"] = args.referer
+            if args.user_agent:
+                headers["User-Agent"] = args.user_agent
+            output_path = args.output or (paths.workspace / "input" / "source-episode.mkv")
+            try:
+                result = download_media_source(
+                    args.media_url,
+                    output_path,
+                    source_provider=args.source_provider,
+                    headers=headers,
+                    timeout_seconds=args.timeout,
+                    max_bytes=args.max_size_mb * 1024 * 1024,
+                )
+            except (SourceDownloadError, ValueError) as exc:
+                parser.error(str(exc))
+            _print_json(result)
+            return
+
         if args.episode_command == "list":
             _print_json(
                 [item.__dict__ for item in store.list_episodes(args.anime_id)]
